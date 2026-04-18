@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "implement-output",
+  "title": "AgentImplementOutput",
+  "description": "Expected structured output from the Implement agent.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "completed": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the task was completed successfully."
+    },
+    "files_modified": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of file paths that were created or modified."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable summary of what was implemented."
+    }
+  }
+}

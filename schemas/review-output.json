@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "review-output",
+  "title": "AgentReviewOutput",
+  "description": "Expected structured output from Review / Whitebox-Test / Blackbox-Test agents.",
+  "type": "object",
+  "required": ["verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "Overall pass/fail verdict."
+    },
+    "summary": {
+      "type": "string",
+      "description": "Human-readable summary of the review or test result."
+    },
+    "issues": {
+      "type": "array",
+      "description": "List of issues found during review or testing.",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$defs": {
+    "issue": {
+      "type": "object",
+      "required": ["severity", "category", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "major", "minor", "suggestion"],
+          "description": "Issue severity level."
+        },
+        "category": {
+          "type": "string",
+          "description": "Issue category (e.g. code_quality, functional_bug, security)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the issue."
+        },
+        "location": {
+          "type": "string",
+          "description": "File path, line number, or area where the issue was found."
+        },
+        "suggested_fix": {
+          "type": "string",
+          "description": "Suggested fix or expected behavior."
+        }
+      }
+    }
+  }
+}

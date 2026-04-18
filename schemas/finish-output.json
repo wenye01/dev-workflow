@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "finish-output",
+  "title": "AgentFinishOutput",
+  "description": "Expected structured output from the Finish agent.",
+  "type": "object",
+  "required": ["summary"],
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Overall execution summary."
+    },
+    "stage_verdicts": {
+      "type": "object",
+      "description": "Per-stage pass/fail verdicts.",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["pass", "fail"]
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Quantitative metrics from the workflow run.",
+      "properties": {
+        "files_changed": {
+          "type": "integer",
+          "description": "Number of files modified."
+        },
+        "tests_added": {
+          "type": "integer",
+          "description": "Number of new tests written."
+        },
+        "issues_found": {
+          "type": "integer",
+          "description": "Total issues discovered across review and testing."
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "description": "Risk descriptions for unresolved issues.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "pr_url": {
+      "type": "string",
+      "description": "URL of the created pull request, if any."
+    }
+  }
+}
