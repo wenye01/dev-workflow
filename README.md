@@ -9,7 +9,7 @@
 ```
 bootstrap → implement → review → whitebox_test → blackbox_test → finish
     ↓          ↑          ↓           ↓               ↓            ↓
-  工作树     重试       重试        重试            重试       PR/报告
+  初始化      重试       重试        重试            重试         PR/报告
 ```
 
 各阶段失败后可根据结果重试或回退到前一阶段（如review失败可回到implement），达到最大重试次数则标记为failed。
