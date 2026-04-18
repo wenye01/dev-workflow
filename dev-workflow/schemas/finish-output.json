@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "required": ["summary"],
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "type": "string"
+    },
+    "files_changed": {
+      "type": "integer"
+    },
+    "tests_added": {
+      "type": "integer"
+    }
+  }
+}

@@ -128,7 +128,7 @@ class ImplementStage(BaseStage):
         return StageOutput(
             stage_name=self.name,
             verdict=Verdict.PASS,
-            stage_specific_context={"more_tasks": more_tasks},
+            output_data={"more_tasks": more_tasks},
         )
 
     def determine_next_stage(self, output: StageOutput) -> StageName | None:
@@ -209,15 +209,13 @@ class ImplementStage(BaseStage):
             prompt=prompt,
             working_dir=context.worktree_path,
             timeout=config.timeout_seconds,
-            max_turns=config.max_turns,
-            max_budget_usd=config.max_budget_usd,
             output_schema=schema_path,
         )
 
         if result.timed_out:
             raise TimeoutError("Agent invocation timed out")
-        if result.exit_code == -2:
-            raise RuntimeError(f"Agent failed to start: {result.stderr}")
+        if result.exit_code != 0:
+            raise RuntimeError(f"Agent invocation failed: {result.stderr}")
 
         return result.parsed_output or {}
 
@@ -227,12 +225,10 @@ class ImplementStage(BaseStage):
         if progress_path.exists():
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
         else:
-            progress = {
-                "workflow_id": context.workflow_id,
-                "completed_tasks": [],
-                "git_commits": [],
-            }
+            progress = {}
 
+        progress.setdefault("completed_tasks", [])
+        progress.setdefault("git_commits", [])
         progress["completed_tasks"].append(task_id)
         progress["current_task"] = None
         progress["last_updated"] = datetime.now().isoformat()

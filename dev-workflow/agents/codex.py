@@ -24,8 +24,6 @@ class CodexBackend(AgentBackend):
         prompt: str,
         working_dir,
         timeout: int,
-        max_turns: int = 30,
-        max_budget_usd: float = 10.0,
         output_schema: Path | None = None,
     ) -> AgentResult:
         """Invoke Codex CLI with the given prompt."""
@@ -33,7 +31,7 @@ class CodexBackend(AgentBackend):
             "codex", "exec", prompt,
             "--full-auto",
             "--json",
-            "--sandbox", "workspace-write",
+            "--dangerously-bypass-approvals-and-sandbox",
         ]
 
         if output_schema is not None:

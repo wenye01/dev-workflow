@@ -36,8 +36,6 @@ def cmd_run(args: argparse.Namespace) -> int:
     stage_config_data = config.get_stage_config(stage_name_str)
     stage_config = StageConfig(
         timeout_seconds=stage_config_data.timeout,
-        max_turns=stage_config_data.max_turns,
-        max_budget_usd=stage_config_data.max_budget_usd,
         agent_backend=config.get_agent_for_stage(stage_name_str),
     )
 

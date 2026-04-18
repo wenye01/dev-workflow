@@ -208,8 +208,6 @@ class StageConfig(BaseModel):
 
     timeout_seconds: int = 600
     agent_backend: str = "claude"
-    max_turns: int = 30
-    max_budget_usd: float = 10.0
 
 
 class ValidationResult(BaseModel):
@@ -227,6 +225,7 @@ class StageOutput(BaseModel):
     result_path: Path | None = None
     artifacts: dict[str, Path] = Field(default_factory=dict)
     error_message: str | None = None
+    output_data: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentResult(BaseModel):

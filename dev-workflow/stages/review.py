@@ -147,12 +147,12 @@ class ReviewStage(BaseStage):
             prompt=prompt,
             working_dir=context.worktree_path,
             timeout=config.timeout_seconds,
-            max_turns=config.max_turns,
-            max_budget_usd=config.max_budget_usd,
             output_schema=schema_path,
         )
         if result.timed_out:
             raise TimeoutError("Review agent timed out")
+        if result.exit_code != 0:
+            raise RuntimeError(f"Agent invocation failed: {result.stderr}")
         return result.parsed_output or {}
 
     def _parse_review_result(self, raw: dict, context: StageContext) -> ReviewFeedback:
