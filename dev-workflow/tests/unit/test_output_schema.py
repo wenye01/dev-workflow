@@ -56,7 +56,7 @@ class TestValidateAgentOutput:
             "issues": [
                 {
                     "severity": "critical",
-                    "category": "functional_bug",
+                    "category": "correctness",
                     "description": "Null pointer on line 42",
                     "location": "main.py:42",
                     "suggested_fix": "Add null check",
@@ -189,7 +189,7 @@ class TestReviewStageParseResult:
             "issues": [
                 {
                     "severity": "critical",
-                    "category": "functional_bug",
+                    "category": "correctness",
                     "description": "Bad",
                     "location": "a.py:1",
                     "suggested_fix": "Fix it",
@@ -214,6 +214,70 @@ class TestReviewStageParseResult:
     def test_empty_dict_returns_fail(self):
         result = self.stage._parse_review_result({}, self.ctx)
         assert result.verdict == Verdict.FAIL
+
+
+class TestExtractReviewCategory:
+    """Tests for orchestrator._extract_review_category mapping logic."""
+
+    def _make_output(self, issues: list[dict] | None) -> StageOutput:
+        """Helper: create a StageOutput with a review-result.json in a temp dir."""
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        path = Path(tmp) / "review-result.json"
+        data = {"verdict": "fail", "issues": issues or []}
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return StageOutput(stage_name=StageName.REVIEW, verdict=Verdict.FAIL, result_path=path)
+
+    def test_correctness_maps_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "correctness", "severity": "critical", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_security_maps_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "security", "severity": "critical", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_ux_maps_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "ux", "severity": "major", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_performance_maps_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "performance", "severity": "major", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_maintainability_maps_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "maintainability", "severity": "minor", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_code_quality_stays(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "code_quality", "severity": "major", "description": "x"}])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_test_quality_stays(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "test_quality", "severity": "major", "description": "x"}])
+        assert _extract_review_category(output) == "test_quality"
+
+    def test_empty_issues_defaults_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([])
+        assert _extract_review_category(output) == "code_quality"
+
+    def test_invalid_category_raises(self):
+        from scripts.orchestrator import _extract_review_category
+        output = self._make_output([{"category": "逻辑错误", "severity": "critical", "description": "x"}])
+        with pytest.raises(ValueError, match="unrecognized review category"):
+            _extract_review_category(output)
+
+    def test_no_result_path_defaults_to_code_quality(self):
+        from scripts.orchestrator import _extract_review_category
+        output = StageOutput(stage_name=StageName.REVIEW, verdict=Verdict.FAIL)
+        assert _extract_review_category(output) == "code_quality"
 
 
 class TestWhiteboxTestStageParseResult:

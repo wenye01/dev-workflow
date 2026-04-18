@@ -142,6 +142,16 @@ def _run_workflow(
         prev_stage = current_stage
         _trigger_transition(engine, current_stage, verdict)
 
+        # Guard: no transition matched — bug, not a runtime condition
+        if instance.current_stage == prev_stage and instance.status == WorkflowStatus.RUNNING:
+            engine.persist()  # persist current state for post-mortem
+            raise RuntimeError(
+                f"State machine stuck: no transition matched for "
+                f"stage={prev_stage.value} verdict={verdict.value}. "
+                f"Check engine.py TRANSITIONS conditions — every trigger must have "
+                f"at least one unconditional path or a catch-all."
+            )
+
         # When routing back to implement from review/test, inject fix tasks
         if (
             verdict == Verdict.FAIL
@@ -236,16 +246,36 @@ def _update_worktree_path(instance: WorkflowInstance, output: StageOutput) -> No
 
 
 def _extract_review_category(output: StageOutput) -> str:
-    """Extract the primary issue category from review-result for state routing."""
+    """Extract the primary issue category from review-result for state routing.
+
+    Maps schema-valid categories to state machine routing categories:
+      - test_quality → "test_quality"  (route to whitebox_test)
+      - all others   → "code_quality"  (route to implement)
+
+    Raises ValueError on values outside the review-output schema enum,
+    so schema/prompt drift is caught immediately.
+    """
+    SCHEMA_CATEGORIES = {
+        "code_quality", "test_quality", "correctness",
+        "security", "ux", "performance", "maintainability",
+    }
+    raw_category = "code_quality"
     if output.result_path and output.result_path.exists():
         try:
             data = json.loads(output.result_path.read_text(encoding="utf-8"))
             issues = data.get("issues", [])
             if issues:
-                return issues[0].get("category", "code_quality")
+                raw_category = issues[0].get("category", "code_quality")
         except (json.JSONDecodeError, ValueError):
             pass
-    return "code_quality"
+    if raw_category not in SCHEMA_CATEGORIES:
+        raise ValueError(
+            f"Agent returned unrecognized review category: '{raw_category}'. "
+            f"Must be one of {SCHEMA_CATEGORIES}. "
+            f"Check review-output schema enum and review prompt instructions."
+        )
+    # Map to routing category: only test_quality stays, everything else → code_quality
+    return raw_category if raw_category == "test_quality" else "code_quality"
 
 
 def _inject_fix_tasks(instance: WorkflowInstance, output: StageOutput) -> None:

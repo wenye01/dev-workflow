@@ -66,6 +66,16 @@
 - 存在2个及以上major问题 → `fail`
 - 只有minor和suggestion → `pass`
 - 不要用"差不多pass"来讨好——有问题就fail，没问题就pass。
+
+**issue category 必须使用以下英文枚举值之一**：
+- `correctness` — 逻辑错误、功能不正确、验收标准未满足
+- `security` — 安全漏洞、注入、XSS等
+- `code_quality` — 命名、重复逻辑、复杂度、可维护性
+- `test_quality` — 测试覆盖不足、测试质量差
+- `ux` — 用户体验、交互问题
+- `performance` — 性能问题
+- `maintainability` — 架构、模块化、技术债
+严禁使用中文或非枚举值。
 </output_format>
 {feedback}
 

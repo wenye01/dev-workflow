@@ -35,14 +35,14 @@ TRANSITIONS = [
     {"trigger": "implement_complete", "source": "implement", "dest": "implement",
      "conditions": "_tasks_remaining", "unless": "_all_tasks_done"},
 
-    # Review: pass → whitebox_test, fail with code_quality → implement,
-    # fail with test_quality → whitebox_test, max retries → failed
+    # Review: pass → whitebox_test, fail with test_quality → whitebox_test,
+    # fail with code_quality → implement, max retries → failed
     {"trigger": "review_complete", "source": "review", "dest": "whitebox_test",
      "conditions": "_verdict_pass"},
-    {"trigger": "review_complete", "source": "review", "dest": "implement",
-     "conditions": "_review_fail_code_quality"},
     {"trigger": "review_complete", "source": "review", "dest": "whitebox_test",
      "conditions": "_review_fail_test_quality"},
+    {"trigger": "review_complete", "source": "review", "dest": "implement",
+     "conditions": "_review_fail_code_quality"},
     {"trigger": "review_max_retries", "source": "review", "dest": "failed"},
 
     # Whitebox-Test: pass → blackbox_test, fail → implement, max → failed

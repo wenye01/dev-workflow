@@ -24,7 +24,8 @@
             "type": "string"
           },
           "category": {
-            "type": "string"
+            "type": "string",
+            "enum": ["code_quality", "test_quality", "correctness", "security", "ux", "performance", "maintainability"]
           },
           "location": {
             "type": "string"

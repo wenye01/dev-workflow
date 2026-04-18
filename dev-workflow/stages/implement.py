@@ -38,11 +38,8 @@ class ImplementStage(BaseStage):
         tasks_path = get_run_state_dir(context.project_path, context.run_id) / "tasks.json"
         if not tasks_path.exists():
             errors.append("tasks.json not found in worktree")
-        else:
-            tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
-            pending = [t for t in tasks if t.get("status") == "pending"]
-            if not pending:
-                errors.append("No pending tasks found")
+        # No pending tasks is NOT an error — execute() will return PASS
+        # with "All tasks completed", allowing the workflow to proceed.
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
