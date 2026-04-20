@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from scripts.models import (
     get_run_state_dir,
 )
 from stages.base import BaseStage
+
+logger = logging.getLogger(__name__)
 
 
 class FinishStage(BaseStage):
@@ -45,6 +48,7 @@ class FinishStage(BaseStage):
         )
 
     def execute(self, context: StageContext, config: StageConfig) -> StageOutput:
+        logger.info("Finish stage starting: run_id=%s", context.run_id)
         state_dir = get_run_state_dir(context.project_path, context.run_id)
         report_path = state_dir / "report.md"
         report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,9 +56,11 @@ class FinishStage(BaseStage):
         # Generate execution report
         report = self._generate_report(context)
         report_path.write_text(report, encoding="utf-8")
+        logger.info("Report generated: %s", report_path)
 
         # Create PR
         pr_result = self._create_pull_request(context)
+        logger.info("PR result: %s", pr_result or "(no PR created)")
 
         # Update final state
         self._update_final_state(context, pr_result)
@@ -64,10 +70,8 @@ class FinishStage(BaseStage):
             verdict=Verdict.PASS,
             result_path=report_path,
             artifacts={"report": report_path},
+            output_data={"pr_url": pr_result or ""},
         )
-
-    def determine_next_stage(self, output: StageOutput) -> StageName | None:
-        return None  # Terminal stage
 
     def validate_output(self, output: StageOutput, worktree_path: Path) -> ValidationResult:
         errors = []

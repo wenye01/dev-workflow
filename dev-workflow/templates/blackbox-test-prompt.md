@@ -69,7 +69,7 @@
 </constraints>
 
 <output_format>
-输出结构化测试结果JSON，包含 verdict、summary、issues 字段。输出格式由系统schema强制约束。
+输出结构化测试结果JSON，包含 `verdict`、`summary`、`issues` 字段。每个 issue 只需要 `severity`、`category`、`description`、`location`。输出格式由系统schema强制约束。
 
 **问题严重性标准**：
 - **critical**：核心功能完全不可用，或数据丢失/损坏

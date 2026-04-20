@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from scripts.models import StageName
 from stages.base import BaseStage
+from stages.adjudicate import AdjudicateStage
 from stages.blackbox_test import BlackboxTestStage
 from stages.bootstrap import BootstrapStage
 from stages.finish import FinishStage
@@ -16,6 +17,7 @@ _STAGE_REGISTRY: dict[StageName, type[BaseStage]] = {
     StageName.BOOTSTRAP: BootstrapStage,
     StageName.IMPLEMENT: ImplementStage,
     StageName.REVIEW: ReviewStage,
+    StageName.ADJUDICATE: AdjudicateStage,
     StageName.WHITEBOX_TEST: WhiteboxTestStage,
     StageName.BLACKBOX_TEST: BlackboxTestStage,
     StageName.FINISH: FinishStage,

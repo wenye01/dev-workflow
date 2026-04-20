@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from datetime import datetime
 from pathlib import Path
 
+from agents import get_agent_backend
 from scripts.models import (
     AgentContext,
     Issue,
@@ -19,6 +23,8 @@ from scripts.models import (
 )
 from scripts.output_schema import get_schema_path, validate_agent_output
 from stages.base import BaseStage
+
+logger = logging.getLogger(__name__)
 
 
 class WhiteboxTestStage(BaseStage):
@@ -52,10 +58,12 @@ class WhiteboxTestStage(BaseStage):
 
     def execute(self, context: StageContext, config: StageConfig) -> StageOutput:
         prompt = self._build_test_prompt(context)
+        logger.info("Whitebox test prompt built: %d chars", len(prompt))
 
         try:
             result = self._invoke_agent(prompt, context, config)
         except Exception as e:
+            logger.error("Whitebox test agent FAILED: %s", e)
             return StageOutput(
                 stage_name=self.name,
                 verdict=Verdict.FAIL,
@@ -63,6 +71,7 @@ class WhiteboxTestStage(BaseStage):
             )
 
         feedback = self._parse_test_result(result)
+        logger.info("Whitebox test verdict: %s, issues: %d", feedback.verdict.value, len(feedback.issues))
 
         test_path = get_run_state_dir(context.project_path, context.run_id) / "test-result.json"
         test_path.parent.mkdir(parents=True, exist_ok=True)
@@ -75,11 +84,6 @@ class WhiteboxTestStage(BaseStage):
             artifacts={"test-result": test_path},
         )
 
-    def determine_next_stage(self, output: StageOutput) -> StageName | None:
-        if output.verdict == Verdict.PASS:
-            return StageName.BLACKBOX_TEST
-        return StageName.IMPLEMENT
-
     def validate_output(self, output: StageOutput, worktree_path: Path) -> ValidationResult:
         errors = []
         test_path = output.result_path if output.result_path else None
@@ -87,12 +91,8 @@ class WhiteboxTestStage(BaseStage):
             return ValidationResult(is_valid=False, errors=["test-result.json not found"])
 
         try:
-            import json
-            content = json.loads(test_path.read_text(encoding="utf-8"))
-            parsed, parse_errors = validate_agent_output(content, "review-output")
-            if parsed is None:
-                errors.extend(f"test-result.json: {e}" for e in parse_errors)
-        except (json.JSONDecodeError, ValueError) as e:
+            ReviewFeedback.model_validate_json(test_path.read_text(encoding="utf-8"))
+        except Exception as e:
             errors.append(f"test-result.json is not valid JSON: {e}")
 
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
@@ -101,9 +101,8 @@ class WhiteboxTestStage(BaseStage):
         """Build whitebox test prompt using template."""
         from context.builder import load_project_context, render_template
 
-        spec_text = ""
-        if context.spec_path.exists():
-            spec_text = context.spec_path.read_text(encoding="utf-8")
+        agent_ctx = context.agent_context or self.build_agent_context(context)
+        spec_text = agent_ctx.spec_content
 
         # Collect source file references
         file_refs = self._collect_source_files(context.worktree_path)
@@ -156,19 +155,38 @@ class WhiteboxTestStage(BaseStage):
         return "未检测到测试框架，请使用项目标准测试工具。"
 
     def _invoke_agent(self, prompt: str, context: StageContext, config: StageConfig) -> dict:
-        from agents.claude import ClaudeBackend
-        backend = ClaudeBackend()
+        backend = get_agent_backend(config.agent_backend)
         schema_path = get_schema_path("review-output")
+
+        state_dir = get_run_state_dir(context.project_path, context.run_id)
+        debug_log_dir = state_dir / "agent-logs" / f"whitebox-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        logger.info("Whitebox test agent debug log dir: %s", debug_log_dir)
+
         result = backend.invoke(
             prompt=prompt,
             working_dir=context.worktree_path,
             timeout=config.timeout_seconds,
             output_schema=schema_path,
+            debug_log_dir=debug_log_dir,
         )
+
+        summary = {
+            "exit_code": result.exit_code,
+            "timed_out": result.timed_out,
+            "stdout_length": len(result.stdout),
+            "stderr_length": len(result.stderr),
+            "stderr_preview": result.stderr[:2000] if result.stderr else "",
+            "parsed_output_keys": list(result.parsed_output.keys()) if result.parsed_output else None,
+            "timestamp": datetime.now().isoformat(),
+        }
+        (debug_log_dir / "result-summary.json").write_text(
+            json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8",
+        )
+
         if result.timed_out:
-            raise TimeoutError("Whitebox test agent timed out")
+            raise TimeoutError(f"Whitebox test agent timed out after {config.timeout_seconds}s")
         if result.exit_code != 0:
-            raise RuntimeError(f"Agent invocation failed: {result.stderr}")
+            raise RuntimeError(f"Agent invocation failed (exit_code={result.exit_code}): {result.stderr}")
         return result.parsed_output or {}
 
     def _parse_test_result(self, raw: dict) -> ReviewFeedback:
@@ -191,7 +209,6 @@ class WhiteboxTestStage(BaseStage):
                 category=i["category"],
                 description=i["description"],
                 location=i.get("location", ""),
-                suggested_fix=i.get("suggested_fix", ""),
             )
             for i in parsed.get("issues", [])
         ]

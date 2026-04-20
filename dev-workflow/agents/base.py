@@ -22,6 +22,7 @@ class AgentBackend(ABC):
         working_dir: Path,
         timeout: int,
         output_schema: Path | None = None,
+        debug_log_dir: Path | None = None,
     ) -> AgentResult:
         """Invoke the agent CLI as a subprocess.
 
@@ -30,6 +31,7 @@ class AgentBackend(ABC):
             working_dir: Working directory for the subprocess.
             timeout: Wall-clock timeout in seconds.
             output_schema: Path to a JSON Schema file for structured output.
+            debug_log_dir: If set, save debug logs (prompt, stdout, stderr) to this dir.
 
         Returns:
             AgentResult with exit code, stdout, and parsed output.

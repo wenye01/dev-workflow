@@ -1,21 +1,20 @@
-"""Main workflow orchestrator entry point."""
+﻿"""Main workflow orchestrator entry point."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
-# Ensure repo root is on sys.path for sibling imports
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.config import WorkflowConfig, load_config
 from scripts.engine import WorkflowEngine
+from scripts.issue_tracker import close_validated_issues
 from scripts.models import (
     ProgressArtifact,
     StageConfig,
@@ -35,28 +34,19 @@ from stages import get_stage
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Execution loop — the core missing piece
-# ---------------------------------------------------------------------------
-
-
-def _run_workflow(
-    engine: WorkflowEngine,
-    config: WorkflowConfig,
-    spec_path: Path,
-) -> int:
+def _run_workflow(engine: WorkflowEngine, config: WorkflowConfig, spec_path: Path) -> int:
     """Main execution loop: iterate through stages until workflow completes or fails."""
     instance = engine.instance
     instance.status = WorkflowStatus.RUNNING
     engine.persist()
 
-    max_iterations = 50  # Safety limit against infinite loops
+    max_iterations = 50
     iteration = 0
 
     while instance.status not in (WorkflowStatus.COMPLETED, WorkflowStatus.FAILED):
         iteration += 1
         if iteration > max_iterations:
-            logger.error("Workflow exceeded %d iterations — aborting.", max_iterations)
+            logger.error("Workflow exceeded %d iterations, aborting.", max_iterations)
             instance.status = WorkflowStatus.FAILED
             engine.persist()
             break
@@ -64,105 +54,99 @@ def _run_workflow(
         current_stage = instance.current_stage
         logger.info("=== Iteration %d: Stage %s ===", iteration, current_stage.value)
 
-        # --- Instantiate stage ---
         stage = get_stage(current_stage)
-
-        # --- Build context ---
         context = _build_stage_context(instance, spec_path, engine)
-
-        # --- Per-stage config ---
         stage_cfg = config.get_stage_config(current_stage.value)
         stage_config = StageConfig(
             timeout_seconds=stage_cfg.timeout,
             agent_backend=config.get_agent_for_stage(current_stage.value),
         )
 
-        # --- Validate input ---
         validation = stage.validate_input(context)
         if not validation.is_valid:
-            logger.warning(
-                "Stage %s input validation failed: %s", current_stage.value, validation.errors,
-            )
+            logger.warning("Stage %s input validation failed: %s", current_stage.value, validation.errors)
             engine.add_stage_execution(StageExecution(
                 workflow_id=instance.id,
                 stage_name=current_stage,
                 status=StageStatus.FAILED,
+                retry_attempt=engine.get_retry_count(current_stage.value),
             ))
             engine.set_verdict(Verdict.FAIL)
             _trigger_transition(engine, current_stage, Verdict.FAIL)
             engine.persist()
             continue
 
-        # --- Execute ---
+        context = context.model_copy(update={"agent_context": stage.build_agent_context(context)})
+
         logger.info("Executing stage: %s", current_stage.value)
+        logger.info("  worktree_path: %s", context.worktree_path)
+        logger.info("  retry_count: %d", context.retry_count)
         output = stage.execute(context, stage_config)
         verdict = output.verdict or Verdict.FAIL
         logger.info("Stage %s verdict: %s", current_stage.value, verdict.value)
+        if output.error_message:
+            logger.info("  error_message: %s", output.error_message)
+        if output.output_data:
+            logger.info("  output_data: %s", json.dumps(output.output_data, default=str)[:500])
+        logger.info("  result_path: %s", output.result_path)
 
-        # Record execution
-        engine.add_stage_execution(StageExecution(
+        execution = StageExecution(
             workflow_id=instance.id,
             stage_name=current_stage,
             status=StageStatus.COMPLETED if verdict == Verdict.PASS else StageStatus.FAILED,
             completed_at=datetime.now(),
-        ))
+            retry_attempt=engine.get_retry_count(current_stage.value),
+        )
+        if output.result_path:
+            execution.agent_result_path = output.result_path
+        engine.add_stage_execution(execution)
 
-        # --- Post-execution hooks per stage ---
+        output_validation = stage.validate_output(output, context.worktree_path)
+        if not output_validation.is_valid:
+            logger.error("Stage %s output validation failed: %s", current_stage.value, output_validation.errors)
+            output.verdict = Verdict.FAIL
+            verdict = Verdict.FAIL
+            execution.status = StageStatus.FAILED
+
         if current_stage == StageName.BOOTSTRAP and verdict == Verdict.PASS:
             _update_worktree_path(instance, output)
-            state_dir = get_run_state_dir(instance.project_path, instance.run_id)
-            _generate_tasks_from_spec(spec_path, state_dir)
-
-        if current_stage == StageName.IMPLEMENT:
+        if current_stage == StageName.IMPLEMENT and verdict == Verdict.PASS:
             more_tasks = (output.output_data or {}).get("more_tasks", False)
             engine.set_tasks_complete(not more_tasks)
 
-        # Extract issue category for review routing
-        issue_category = None
-        if current_stage == StageName.REVIEW and verdict == Verdict.FAIL:
-            issue_category = _extract_review_category(output)
+        engine.set_verdict(verdict)
+        if current_stage == StageName.ADJUDICATE and verdict == Verdict.PASS:
+            next_stage = (output.output_data or {}).get("next_stage")
+            if next_stage:
+                engine.set_adjudicate_target(StageName(next_stage))
 
-        # Set verdict on engine (drives conditional transitions)
-        engine.set_verdict(verdict, issue_category)
+        if current_stage in (StageName.REVIEW, StageName.WHITEBOX_TEST, StageName.BLACKBOX_TEST) and verdict == Verdict.PASS:
+            state_dir = get_run_state_dir(instance.project_path, instance.run_id)
+            close_validated_issues(state_dir / "issues.json", current_stage)
 
-        # --- Retry handling ---
+        if current_stage == StageName.FINISH and verdict == Verdict.PASS:
+            pr_url = (output.output_data or {}).get("pr_url")
+            if isinstance(pr_url, str) and pr_url.strip():
+                instance.pr_url = pr_url.strip()
+
         if verdict == Verdict.FAIL:
-            if _has_max_retries_trigger(current_stage) and engine.retries_exhausted(
-                current_stage.value,
-            ):
-                logger.error(
-                    "Stage %s exhausted retries (%d)", current_stage.value, instance.max_retries,
-                )
+            if _has_max_retries_trigger(current_stage) and engine.retries_exhausted(current_stage.value):
+                logger.error("Stage %s exhausted retries (%d)", current_stage.value, instance.max_retries)
                 _trigger_max_retries(engine, current_stage)
                 engine.persist()
                 break
             engine.increment_retry(current_stage.value)
 
-        # --- Trigger state transition ---
-        prev_stage = current_stage
-        _trigger_transition(engine, current_stage, verdict)
+        transitioned = _trigger_transition(engine, current_stage, verdict)
 
-        # Guard: no transition matched — bug, not a runtime condition
-        if instance.current_stage == prev_stage and instance.status == WorkflowStatus.RUNNING:
-            engine.persist()  # persist current state for post-mortem
+        if not transitioned and instance.status == WorkflowStatus.RUNNING:
+            engine.persist()
             raise RuntimeError(
-                f"State machine stuck: no transition matched for "
-                f"stage={prev_stage.value} verdict={verdict.value}. "
-                f"Check engine.py TRANSITIONS conditions — every trigger must have "
-                f"at least one unconditional path or a catch-all."
+                f"State machine stuck: no transition matched for stage={current_stage.value} verdict={verdict.value}.",
             )
-
-        # When routing back to implement from review/test, inject fix tasks
-        if (
-            verdict == Verdict.FAIL
-            and prev_stage in (StageName.REVIEW, StageName.WHITEBOX_TEST, StageName.BLACKBOX_TEST)
-            and instance.current_stage == StageName.IMPLEMENT
-        ):
-            _inject_fix_tasks(instance, output)
 
         engine.persist()
 
-    # --- Final output ---
     result = {
         "workflow_id": instance.id,
         "run_id": instance.run_id,
@@ -174,17 +158,7 @@ def _run_workflow(
     return 0 if instance.status == WorkflowStatus.COMPLETED else 1
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _build_stage_context(
-    instance: WorkflowInstance,
-    spec_path: Path,
-    engine: WorkflowEngine,
-) -> StageContext:
-    """Build StageContext for the current stage from instance + engine state."""
+def _build_stage_context(instance: WorkflowInstance, spec_path: Path, engine: WorkflowEngine) -> StageContext:
     return StageContext(
         workflow_id=instance.id,
         run_id=instance.run_id,
@@ -197,25 +171,31 @@ def _build_stage_context(
     )
 
 
-def _trigger_transition(engine: WorkflowEngine, stage: StageName, verdict: Verdict) -> None:
-    """Trigger the correct state machine transition after a stage completes."""
+def _trigger_transition(engine: WorkflowEngine, stage: StageName, verdict: Verdict) -> bool:
     if stage == StageName.BOOTSTRAP:
         if verdict == Verdict.PASS:
-            engine.start_workflow()
-        else:
-            engine.bootstrap_failed()
+            return bool(engine.start_workflow())
+        return bool(engine.bootstrap_failed())
     elif stage == StageName.IMPLEMENT:
-        engine.implement_complete()
+        if verdict == Verdict.FAIL:
+            return bool(engine.implement_failed())
+        return bool(engine.implement_complete())
     elif stage == StageName.REVIEW:
-        engine.review_complete()
+        return bool(engine.review_complete())
+    elif stage == StageName.ADJUDICATE:
+        if verdict == Verdict.FAIL:
+            return bool(engine.adjudicate_failed())
+        return bool(engine.adjudicate_complete())
     elif stage in (StageName.WHITEBOX_TEST, StageName.BLACKBOX_TEST):
-        engine.test_complete()
+        return bool(engine.test_complete())
     elif stage == StageName.FINISH:
-        engine.finish_complete()
+        if verdict == Verdict.FAIL:
+            return bool(engine.finish_failed())
+        return bool(engine.finish_complete())
+    return False
 
 
 def _trigger_max_retries(engine: WorkflowEngine, stage: StageName) -> None:
-    """Trigger max-retries transition for stages that support it."""
     if stage == StageName.REVIEW:
         engine.review_max_retries()
     elif stage == StageName.WHITEBOX_TEST:
@@ -223,17 +203,14 @@ def _trigger_max_retries(engine: WorkflowEngine, stage: StageName) -> None:
     elif stage == StageName.BLACKBOX_TEST:
         engine.test_max_retries()
     else:
-        # No dedicated trigger — force failure on the instance directly
         engine.instance.status = WorkflowStatus.FAILED
 
 
 def _has_max_retries_trigger(stage: StageName) -> bool:
-    """Check whether a stage has a dedicated max-retries transition."""
     return stage in (StageName.REVIEW, StageName.WHITEBOX_TEST, StageName.BLACKBOX_TEST)
 
 
 def _update_worktree_path(instance: WorkflowInstance, output: StageOutput) -> None:
-    """Propagate worktree_path from bootstrap result to the live instance."""
     if output.result_path and output.result_path.exists():
         try:
             data = json.loads(output.result_path.read_text(encoding="utf-8"))
@@ -245,142 +222,9 @@ def _update_worktree_path(instance: WorkflowInstance, output: StageOutput) -> No
             logger.warning("Could not read worktree path from bootstrap result: %s", exc)
 
 
-def _extract_review_category(output: StageOutput) -> str:
-    """Extract the primary issue category from review-result for state routing.
-
-    Maps schema-valid categories to state machine routing categories:
-      - test_quality → "test_quality"  (route to whitebox_test)
-      - all others   → "code_quality"  (route to implement)
-
-    Raises ValueError on values outside the review-output schema enum,
-    so schema/prompt drift is caught immediately.
-    """
-    SCHEMA_CATEGORIES = {
-        "code_quality", "test_quality", "correctness",
-        "security", "ux", "performance", "maintainability",
-    }
-    raw_category = "code_quality"
-    if output.result_path and output.result_path.exists():
-        try:
-            data = json.loads(output.result_path.read_text(encoding="utf-8"))
-            issues = data.get("issues", [])
-            if issues:
-                raw_category = issues[0].get("category", "code_quality")
-        except (json.JSONDecodeError, ValueError):
-            pass
-    if raw_category not in SCHEMA_CATEGORIES:
-        raise ValueError(
-            f"Agent returned unrecognized review category: '{raw_category}'. "
-            f"Must be one of {SCHEMA_CATEGORIES}. "
-            f"Check review-output schema enum and review prompt instructions."
-        )
-    # Map to routing category: only test_quality stays, everything else → code_quality
-    return raw_category if raw_category == "test_quality" else "code_quality"
-
-
-def _inject_fix_tasks(instance: WorkflowInstance, output: StageOutput) -> None:
-    """Inject fix tasks from review/test feedback so implement has work to do."""
-    state_dir = get_run_state_dir(instance.project_path, instance.run_id)
-    tasks_path = state_dir / "tasks.json"
-    if not tasks_path.exists():
-        return
-
-    tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
-
-    # Already have pending tasks? Nothing to inject.
-    if any(t.get("status") == "pending" for t in tasks):
-        return
-
-    # Build fix task description from feedback issues
-    fix_lines: list[str] = []
-    if output.result_path and output.result_path.exists():
-        try:
-            data = json.loads(output.result_path.read_text(encoding="utf-8"))
-            for issue in data.get("issues", []):
-                desc = issue.get("description", "Unknown issue")
-                loc = issue.get("location", "")
-                fix_lines.append(f"- {desc}" + (f" ({loc})" if loc else ""))
-        except (json.JSONDecodeError, ValueError):
-            pass
-
-    if not fix_lines:
-        fix_lines = ["Fix issues identified in review/test feedback"]
-
-    fix_task = {
-        "id": f"fix-{len(tasks) + 1}",
-        "title": "Fix review/test feedback",
-        "description": "Address the following issues:\n" + "\n".join(fix_lines),
-        "status": "pending",
-        "priority": len(tasks),
-    }
-    tasks.append(fix_task)
-    tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("Injected fix task: %s", fix_task["id"])
-
-
-def _generate_tasks_from_spec(spec_path: Path, state_dir: Path) -> list[dict]:
-    """Parse spec file and write tasks.json so the implement stage can find work."""
-    content = spec_path.read_text(encoding="utf-8")
-    tasks: list[dict] = []
-
-    # 1. Markdown checkbox items: - [ ] Title
-    checkbox = re.compile(r"^[\-\*]\s+\[[ xX]\]\s+(.+)$", re.MULTILINE)
-    matches = checkbox.findall(content)
-    if matches:
-        for i, title in enumerate(matches):
-            tasks.append({
-                "id": f"task-{i + 1}",
-                "title": title.strip(),
-                "description": title.strip(),
-                "status": "pending",
-                "priority": i,
-            })
-
-    # 2. Numbered items under a ## Tasks heading
-    if not tasks:
-        in_tasks = False
-        for line in content.split("\n"):
-            if re.match(r"^##\s+(Tasks|Task\s+List)", line, re.IGNORECASE):
-                in_tasks = True
-                continue
-            if in_tasks and re.match(r"^##\s", line):
-                break
-            if in_tasks:
-                m = re.match(r"^(\d+)\.\s+(.+)$", line)
-                if m:
-                    tasks.append({
-                        "id": f"task-{len(tasks) + 1}",
-                        "title": m.group(2).strip(),
-                        "description": m.group(2).strip(),
-                        "status": "pending",
-                        "priority": len(tasks),
-                    })
-
-    # 3. Fallback: single task from the whole spec
-    if not tasks:
-        summary = content.strip().split("\n")[0][:100]
-        tasks.append({
-            "id": "task-1",
-            "title": f"Implement per specification: {summary}",
-            "description": content,
-            "status": "pending",
-            "priority": 0,
-        })
-
-    state_dir.mkdir(parents=True, exist_ok=True)
-    tasks_path = state_dir / "tasks.json"
-    tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info("Generated %d tasks from spec → %s", len(tasks), tasks_path)
-    return tasks
-
-
-# ---------------------------------------------------------------------------
-# CLI commands
-# ---------------------------------------------------------------------------
 
 
 def cmd_start(args: argparse.Namespace) -> int:
-    """Start a new development workflow from a specification."""
     spec_path = Path(args.spec).resolve()
     if not spec_path.exists():
         print(f"Error: spec file not found: {spec_path}", file=sys.stderr)
@@ -393,22 +237,15 @@ def cmd_start(args: argparse.Namespace) -> int:
 
     project_path = Path(args.project).resolve() if args.project else Path.cwd()
     config_path = Path(args.config).resolve() if args.config else None
-
-    # Load configuration
     config = load_config(config_path)
 
-    # Read spec content
     spec_content = spec_path.read_text(encoding="utf-8")
-
-    # Create workflow spec
     workflow_spec = WorkflowSpec(
         source_requirement=spec_content[:500],
         spec_path=spec_path,
         acceptance_criteria=[],
         tasks=[],
     )
-
-    # Create workflow instance
     instance = WorkflowInstance(
         slug=slug,
         spec=workflow_spec,
@@ -419,17 +256,13 @@ def cmd_start(args: argparse.Namespace) -> int:
         max_retries=config.workflow.max_retries,
     )
 
-    # Create engine and persist initial state
     engine = WorkflowEngine(instance, config)
     engine.start()
     engine.persist()
-
-    # Run the execution loop
     return _run_workflow(engine, config, spec_path)
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    """Display current workflow status."""
     run_dir = Path.cwd() / ".dev-workflow" / "run"
     if args.workflow_id:
         state_files = list(run_dir.glob(f"{args.workflow_id}/state.json"))
@@ -456,51 +289,38 @@ def cmd_status(args: argparse.Namespace) -> int:
         print(f"Updated:     {instance.updated_at}")
         print("\nStage History:")
         for ex in instance.stage_executions:
-            if ex.status == StageStatus.COMPLETED:
-                status_icon = "OK"
-            elif ex.status == StageStatus.FAILED:
-                status_icon = "XX"
-            else:
-                status_icon = "->"
+            status_icon = "OK" if ex.status == StageStatus.COMPLETED else ("XX" if ex.status == StageStatus.FAILED else "->")
             print(f"  {status_icon} {ex.stage_name.value} (attempt {ex.retry_attempt + 1})")
 
         progress_path = state_path.parent / "progress.json"
         if progress_path.exists():
-            progress = ProgressArtifact.model_validate_json(
-                progress_path.read_text(encoding="utf-8"),
-            )
+            progress = ProgressArtifact.model_validate_json(progress_path.read_text(encoding="utf-8"))
             print("\nProgress:")
             print(f"  Completed tasks: {len(progress.completed_tasks)}")
             print(f"  Current task:    {progress.current_task or 'none'}")
             if progress.blocked_reason:
                 print(f"  Blocked:         {progress.blocked_reason}")
-
     return 0
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
-    """Resume an interrupted workflow."""
     from scripts.engine import restore_engine
 
     run_dir = Path.cwd() / ".dev-workflow" / "run"
     state_files = list(run_dir.glob("*/state.json"))
-
     if not state_files:
         print("No interrupted workflow found.", file=sys.stderr)
         return 1
 
     state_path = max(state_files, key=lambda p: p.stat().st_mtime)
-
     try:
         config = load_config()
         engine = restore_engine(state_path, config)
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
 
     instance = engine.instance
-
-    # Determine spec path
     spec_path = instance.spec.spec_path if instance.spec and instance.spec.spec_path else Path()
     if not spec_path.exists():
         candidates = list((Path.cwd() / ".dev-workflow").glob("*.md"))
@@ -510,25 +330,20 @@ def cmd_resume(args: argparse.Namespace) -> int:
             print("Error: Cannot find spec file for resume.", file=sys.stderr)
             return 1
 
-    # Run the execution loop
     return _run_workflow(engine, config, spec_path)
 
 
 def cmd_abort(args: argparse.Namespace) -> int:
-    """Terminate a running workflow."""
     run_dir = Path.cwd() / ".dev-workflow" / "run"
     state_files = list(run_dir.glob("*/state.json"))
-
     if not state_files:
         print("No running workflow found.", file=sys.stderr)
         return 1
 
     state_path = max(state_files, key=lambda p: p.stat().st_mtime)
-
     instance = WorkflowInstance.model_validate_json(state_path.read_text(encoding="utf-8"))
     instance.status = WorkflowStatus.FAILED
     instance.updated_at = datetime.now()
-
     state_path.write_text(instance.model_dump_json(indent=2), encoding="utf-8")
 
     print(json.dumps({
@@ -540,47 +355,46 @@ def cmd_abort(args: argparse.Namespace) -> int:
     return 0
 
 
-def _setup_logging(verbose: bool, quiet: bool) -> None:
-    """Configure logging based on CLI flags."""
+def _setup_logging(verbose: bool, quiet: bool, log_file: str | None = None) -> None:
     level = logging.DEBUG if verbose else (logging.WARNING if quiet else logging.INFO)
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+
+    if log_file:
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
+        handlers.append(file_handler)
+
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
+        handlers=handlers,
+        force=True,
     )
 
 
 def main() -> int:
-    """Main entry point for the orchestrator CLI."""
-    parser = argparse.ArgumentParser(
-        prog="orchestrator",
-        description="Multi-agent development workflow orchestrator",
-    )
+    parser = argparse.ArgumentParser(prog="orchestrator", description="Multi-agent development workflow orchestrator")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress non-error output")
+    parser.add_argument("--log-file", default=None, help="Write debug log to file")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # start
     start_parser = subparsers.add_parser("start", help="Start a new workflow")
     start_parser.add_argument("--spec", required=True, help="Path to specification document")
-    start_parser.add_argument(
-        "--slug", required=True,
-        help="Human-readable slug for the workflow (kebab-case)",
-    )
+    start_parser.add_argument("--slug", required=True, help="Human-readable slug for the workflow (kebab-case)")
     start_parser.add_argument("--project", default=None, help="Target project root path")
     start_parser.add_argument("--config", default=None, help="Configuration file path")
 
-    # status
     status_parser = subparsers.add_parser("status", help="Show workflow status")
     status_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
     status_parser.add_argument("--json", action="store_true", help="Output as JSON")
 
-    # resume
     resume_parser = subparsers.add_parser("resume", help="Resume interrupted workflow")
     resume_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
 
-    # abort
     abort_parser = subparsers.add_parser("abort", help="Terminate running workflow")
     abort_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
     abort_parser.add_argument("--force", action="store_true", help="Kill running agent process")
@@ -590,7 +404,7 @@ def main() -> int:
         parser.print_help()
         return 1
 
-    _setup_logging(getattr(args, "verbose", False), getattr(args, "quiet", False))
+    _setup_logging(getattr(args, "verbose", False), getattr(args, "quiet", False), getattr(args, "log_file", None))
 
     commands = {
         "start": cmd_start,
@@ -598,11 +412,8 @@ def main() -> int:
         "resume": cmd_resume,
         "abort": cmd_abort,
     }
-
     handler = commands.get(args.command)
-    if handler:
-        return handler(args)
-    return 1
+    return handler(args) if handler else 1
 
 
 if __name__ == "__main__":

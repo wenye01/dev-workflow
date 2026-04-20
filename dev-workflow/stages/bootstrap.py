@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from scripts.models import (
     get_run_state_dir,
 )
 from stages.base import BaseStage
+
+logger = logging.getLogger(__name__)
 
 
 class BootstrapStage(BaseStage):
@@ -41,10 +44,14 @@ class BootstrapStage(BaseStage):
 
     def execute(self, context: StageContext, config: StageConfig) -> StageOutput:
         try:
+            logger.info("Bootstrap starting: project_path=%s, run_id=%s", context.project_path, context.run_id)
             worktree_path = self._create_worktree(context)
+            logger.info("Worktree created: %s", worktree_path)
             state_dir = self._init_state_dir(context)
+            logger.info("State dir initialized: %s", state_dir)
             self._write_initial_state(state_dir, worktree_path, context)
             self._create_initial_commit(worktree_path, context)
+            logger.info("Bootstrap completed successfully")
 
             return StageOutput(
                 stage_name=self.name,
@@ -52,16 +59,12 @@ class BootstrapStage(BaseStage):
                 result_path=state_dir / "state.json",
             )
         except Exception as e:
+            logger.error("Bootstrap FAILED: %s", e, exc_info=True)
             return StageOutput(
                 stage_name=self.name,
                 verdict=Verdict.FAIL,
                 error_message=str(e),
             )
-
-    def determine_next_stage(self, output: StageOutput) -> StageName | None:
-        if output.verdict == Verdict.PASS:
-            return StageName.IMPLEMENT
-        return None
 
     def validate_output(self, output: StageOutput, worktree_path: Path) -> ValidationResult:
         errors = []

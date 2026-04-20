@@ -30,6 +30,7 @@ class StageName(str, Enum):
     BOOTSTRAP = "bootstrap"
     IMPLEMENT = "implement"
     REVIEW = "review"
+    ADJUDICATE = "adjudicate"
     WHITEBOX_TEST = "whitebox_test"
     BLACKBOX_TEST = "blackbox_test"
     FINISH = "finish"
@@ -70,6 +71,14 @@ class Severity(str, Enum):
     SUGGESTION = "suggestion"
 
 
+class IssueStatus(str, Enum):
+    OPEN = "open"
+    ACCEPTED = "accepted"
+    IMPLEMENTED = "implemented"
+    CLOSED = "closed"
+    REJECTED = "rejected"
+
+
 # --- Entities ---
 
 
@@ -84,6 +93,8 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     dependencies: list[str] = Field(default_factory=list)
     acceptance_criteria: list[str] = Field(default_factory=list)
+    linked_issue_ids: list[str] = Field(default_factory=list)
+    source_stage: StageName | None = None
 
 
 class WorkflowSpec(BaseModel):
@@ -119,6 +130,25 @@ class ReviewFeedback(BaseModel):
     issues: list[Issue] = Field(default_factory=list)
     summary: str = ""
     reviewed_at: datetime = Field(default_factory=_now)
+
+
+class TrackedIssue(BaseModel):
+    """Lifecycle record for a discovered issue across stages."""
+
+    id: str = Field(default_factory=_uuid)
+    fingerprint: str = ""
+    source_stage: StageName
+    severity: Severity
+    category: str
+    description: str
+    location: str = ""
+    suggested_fix: str = ""
+    status: IssueStatus = IssueStatus.OPEN
+    task_id: str | None = None
+    resolution_notes: str = ""
+    first_seen_at: datetime = Field(default_factory=_now)
+    last_seen_at: datetime = Field(default_factory=_now)
+    closed_at: datetime | None = None
 
 
 class StageExecution(BaseModel):
@@ -158,6 +188,7 @@ class WorkflowInstance(BaseModel):
     project_path: Path | None = None
     worktree_path: Path | None = None
     branch_name: str = ""
+    pr_url: str | None = None
     stage_executions: list[StageExecution] = Field(default_factory=list)
     retry_counts: dict[str, int] = Field(default_factory=dict)
     max_retries: int = 3
@@ -201,6 +232,7 @@ class StageContext(BaseModel):
     current_stage: StageName
     retry_count: int = 0
     stage_history: list[StageExecution] = Field(default_factory=list)
+    agent_context: AgentContext | None = None
 
 
 class StageConfig(BaseModel):

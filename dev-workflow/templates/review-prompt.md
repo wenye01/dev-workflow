@@ -59,7 +59,7 @@
 </constraints>
 
 <output_format>
-输出结构化审查结果JSON，包含 verdict、summary、issues 字段。输出格式由系统schema强制约束。
+输出结构化审查结果JSON，包含 `verdict`、`summary`、`issues` 字段。每个 issue 只需要 `severity`、`category`、`description`、`location`。输出格式由系统schema强制约束。
 
 **verdict判定标准**：
 - 存在任何critical问题 → `fail`

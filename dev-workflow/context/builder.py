@@ -19,6 +19,7 @@ _REFERENCES_DIR = "references"
 _STAGE_TEMPLATE_MAP: dict[StageName, str] = {
     StageName.IMPLEMENT: "implement-prompt.md",
     StageName.REVIEW: "review-prompt.md",
+    StageName.ADJUDICATE: "adjudicate-prompt.md",
     StageName.WHITEBOX_TEST: "whitebox-test-prompt.md",
     StageName.BLACKBOX_TEST: "blackbox-test-prompt.md",
 }

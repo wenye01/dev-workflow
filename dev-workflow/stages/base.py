@@ -20,7 +20,7 @@ class BaseStage(ABC):
 
     Every stage must implement this interface. The orchestrator calls these
     methods in order: validate_input -> build_agent_context -> execute ->
-    determine_next_stage.
+    validate_output.
     """
 
     @property
@@ -67,18 +67,6 @@ class BaseStage(ABC):
         ...
 
     @abstractmethod
-    def determine_next_stage(self, output: StageOutput) -> StageName | None:
-        """Determine which stage to execute next based on output.
-
-        Args:
-            output: The result of this stage's execution.
-
-        Returns:
-            Next stage name, or None if workflow should terminate.
-        """
-        ...
-
-    @abstractmethod
     def validate_output(self, output: StageOutput, worktree_path: Path) -> ValidationResult:
         """Validate that the agent produced expected output files/content.
 
@@ -100,8 +88,7 @@ class BaseStage(ABC):
         """
         errors = []
         required_methods = [
-            "validate_input", "build_agent_context",
-            "execute", "determine_next_stage", "validate_output",
+            "validate_input", "build_agent_context", "execute", "validate_output",
         ]
         for method in required_methods:
             if not hasattr(cls, method):

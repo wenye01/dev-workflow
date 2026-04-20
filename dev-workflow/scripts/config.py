@@ -21,7 +21,7 @@ class AgentConfig(BaseModel):
 class StageTimeoutConfig(BaseModel):
     """Per-stage timeout configuration."""
 
-    timeout: int = 600
+    timeout: int = 18000
 
 
 class WorkflowParams(BaseModel):
@@ -41,12 +41,12 @@ class WorkflowConfig(BaseModel):
     def get_stage_config(self, stage_name: str) -> StageTimeoutConfig:
         """Get configuration for a specific stage, with defaults."""
         default_timeouts: dict[str, dict[str, Any]] = {
-            StageName.BOOTSTRAP.value: {"timeout": 300},
-            StageName.IMPLEMENT.value: {"timeout": 1800},
-            StageName.REVIEW.value: {"timeout": 600},
-            StageName.WHITEBOX_TEST.value: {"timeout": 900},
-            StageName.BLACKBOX_TEST.value: {"timeout": 1200},
-            StageName.FINISH.value: {"timeout": 300},
+            StageName.BOOTSTRAP.value: {"timeout": 18000},
+            StageName.IMPLEMENT.value: {"timeout": 18000},
+            StageName.REVIEW.value: {"timeout": 18000},
+            StageName.WHITEBOX_TEST.value: {"timeout": 18000},
+            StageName.BLACKBOX_TEST.value: {"timeout": 18000},
+            StageName.FINISH.value: {"timeout": 18000},
         }
 
         if stage_name in self.stages:
