@@ -37,7 +37,6 @@ class CodexBackend(AgentBackend):
 
         cmd = [
             "codex", "exec", prompt,
-            "--full-auto",
             "--json",
             "--dangerously-bypass-approvals-and-sandbox",
         ]
@@ -113,6 +112,17 @@ class CodexBackend(AgentBackend):
             if obj.get("is_error") is True:
                 cli_error = str(obj.get("result") or obj.get("error") or "Codex CLI reported an error")
                 break
+            item = obj.get("item")
+            if isinstance(item, dict) and item.get("type") == "agent_message":
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    try:
+                        decoded = json.loads(_strip_markdown_fences(text))
+                    except json.JSONDecodeError:
+                        decoded = None
+                    if isinstance(decoded, dict):
+                        payload = decoded
+                        break
             if isinstance(obj.get("structured_output"), dict):
                 payload = obj["structured_output"]
                 break

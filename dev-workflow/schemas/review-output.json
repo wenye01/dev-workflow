@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["verdict"],
+  "required": ["verdict", "summary", "issues"],
   "additionalProperties": false,
   "properties": {
     "verdict": {
@@ -15,7 +15,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["severity", "category", "description"],
+        "required": ["severity", "category", "description", "location"],
         "additionalProperties": false,
         "properties": {
           "severity": {
