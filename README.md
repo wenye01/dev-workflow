@@ -62,6 +62,28 @@ python dev-workflow/scripts/stage_runner.py run <stage> --worktree <path> --spec
 python dev-workflow/scripts/stage_runner.py list      # 列出可用阶段
 ```
 
+### 5. 配置不同阶段的 Agent 与模型
+
+项目级配置文件位于 `.dev-workflow/config.yml`。配置以 `stages.<stage>` 为中心，每个阶段可以直接指定 `agent`、`model` 和 `timeout`：
+
+```yaml
+agent:
+  default: codex
+  model: gpt-5.4
+
+stages:
+  review:
+    model: gpt-5.5
+  whitebox_test:
+    agent: claude
+    model: claude-sonnet-4-20250514
+    timeout: 24000
+```
+
+这里的模型名会直接透传给对应 CLI：
+- `codex` backend 使用 `codex exec --model <name>`
+- `claude` backend 使用 `claude -p --model <name>`
+
 ## 项目结构
 
 ```

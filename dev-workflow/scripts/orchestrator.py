@@ -77,6 +77,7 @@ def _run_workflow(engine: WorkflowEngine, config: WorkflowConfig, spec_path: Pat
         stage_config = StageConfig(
             timeout_seconds=stage_cfg.timeout,
             agent_backend=config.get_agent_for_stage(current_stage.value),
+            agent_model=config.get_model_for_stage(current_stage.value),
         )
 
         validation = stage.validate_input(context)

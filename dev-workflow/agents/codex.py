@@ -28,6 +28,7 @@ class CodexBackend(AgentBackend):
         prompt: str,
         working_dir,
         timeout: int,
+        model: str | None = None,
         output_schema: Path | None = None,
         debug_log_dir: Path | None = None,
     ) -> AgentResult:
@@ -41,13 +42,16 @@ class CodexBackend(AgentBackend):
             "--dangerously-bypass-approvals-and-sandbox",
         ]
 
+        if model:
+            cmd.extend(["--model", model])
+
         if output_schema is not None:
             cmd.extend(["--output-schema", str(output_schema)])
 
         env = os.environ.copy()
         env["RUST_LOG"] = "debug"
 
-        logger.info("Codex CLI invocation: working_dir=%s, timeout=%ds", working_dir, timeout)
+        logger.info("Codex CLI invocation: working_dir=%s, timeout=%ds, model=%s", working_dir, timeout, model)
         logger.info("Prompt length: %d chars", len(prompt))
         logger.info("Codex verbose logging enabled via RUST_LOG=%s", env["RUST_LOG"])
 

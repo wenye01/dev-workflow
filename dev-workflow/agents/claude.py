@@ -28,6 +28,7 @@ class ClaudeBackend(AgentBackend):
         prompt: str,
         working_dir,
         timeout: int,
+        model: str | None = None,
         output_schema: Path | None = None,
         debug_log_dir: Path | None = None,
     ) -> AgentResult:
@@ -48,6 +49,9 @@ class ClaudeBackend(AgentBackend):
             "--dangerously-skip-permissions",
         ]
 
+        if model:
+            cmd.extend(["--model", model])
+
         # Add debug flags for traceability
         if debug_log_dir is not None:
             debug_file = debug_log_dir / "claude-debug.log"
@@ -61,7 +65,7 @@ class ClaudeBackend(AgentBackend):
 
         # Log invocation details
         logger.info("=" * 60)
-        logger.info("Claude CLI invocation: working_dir=%s, timeout=%ds", working_dir, timeout)
+        logger.info("Claude CLI invocation: working_dir=%s, timeout=%ds, model=%s", working_dir, timeout, model)
         logger.info("Command (first 500 chars): %s", " ".join(cmd)[:500])
         logger.info("Prompt length: %d chars", len(prompt))
         logger.info("Output schema: %s", output_schema)
@@ -71,7 +75,7 @@ class ClaudeBackend(AgentBackend):
             (debug_log_dir / "prompt.txt").write_text(prompt, encoding="utf-8")
             (debug_log_dir / "command.txt").write_text(
                 json.dumps({"cmd": [c if len(c) < 200 else c[:200] + "..." for c in cmd],
-                            "cwd": str(working_dir), "timeout": timeout}, indent=2),
+                            "cwd": str(working_dir), "timeout": timeout, "model": model}, indent=2),
                 encoding="utf-8",
             )
 

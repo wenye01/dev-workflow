@@ -37,6 +37,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     stage_config = StageConfig(
         timeout_seconds=stage_config_data.timeout,
         agent_backend=config.get_agent_for_stage(stage_name_str),
+        agent_model=config.get_model_for_stage(stage_name_str),
     )
 
     # Build context

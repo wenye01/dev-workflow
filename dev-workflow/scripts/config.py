@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field
@@ -15,13 +14,15 @@ class AgentConfig(BaseModel):
     """Agent backend configuration."""
 
     default: str = "claude"
-    stages: dict[str, str] = Field(default_factory=dict)
+    model: str | None = None
 
 
-class StageTimeoutConfig(BaseModel):
-    """Per-stage timeout configuration."""
+class StageConfigEntry(BaseModel):
+    """Per-stage runtime configuration."""
 
-    timeout: int = 18000
+    timeout: int | None = None
+    agent: str | None = None
+    model: str | None = None
 
 
 class WorkflowParams(BaseModel):
@@ -35,30 +36,34 @@ class WorkflowConfig(BaseModel):
     """Root configuration loaded from .dev-workflow/config.yml."""
 
     agent: AgentConfig = Field(default_factory=AgentConfig)
-    stages: dict[str, StageTimeoutConfig] = Field(default_factory=dict)
+    stages: dict[str, StageConfigEntry] = Field(default_factory=dict)
     workflow: WorkflowParams = Field(default_factory=WorkflowParams)
 
-    def get_stage_config(self, stage_name: str) -> StageTimeoutConfig:
+    def get_stage_config(self, stage_name: str) -> StageConfigEntry:
         """Get configuration for a specific stage, with defaults."""
-        default_timeouts: dict[str, dict[str, Any]] = {
-            StageName.BOOTSTRAP.value: {"timeout": 18000},
-            StageName.IMPLEMENT.value: {"timeout": 18000},
-            StageName.REVIEW.value: {"timeout": 18000},
-            StageName.WHITEBOX_TEST.value: {"timeout": 18000},
-            StageName.BLACKBOX_TEST.value: {"timeout": 18000},
-            StageName.FINISH.value: {"timeout": 18000},
-        }
-
-        if stage_name in self.stages:
-            return self.stages[stage_name]
-
-        return StageTimeoutConfig(**default_timeouts.get(stage_name, {}))
+        default_timeout = 18000 if stage_name in {stage.value for stage in StageName} else 18000
+        stage = self.stages.get(stage_name)
+        if stage is None:
+            return StageConfigEntry(timeout=default_timeout)
+        return StageConfigEntry(
+            timeout=stage.timeout if stage.timeout is not None else default_timeout,
+            agent=stage.agent,
+            model=stage.model,
+        )
 
     def get_agent_for_stage(self, stage_name: str) -> str:
         """Get the agent backend name for a specific stage."""
-        if stage_name in self.agent.stages:
-            return self.agent.stages[stage_name]
+        stage = self.stages.get(stage_name)
+        if stage is not None and stage.agent is not None:
+            return stage.agent
         return self.agent.default
+
+    def get_model_for_stage(self, stage_name: str) -> str | None:
+        """Get the model override for a specific stage."""
+        stage = self.stages.get(stage_name)
+        if stage is not None and stage.model is not None:
+            return stage.model
+        return self.agent.model
 
 
 def load_config(config_path: Path | None = None) -> WorkflowConfig:

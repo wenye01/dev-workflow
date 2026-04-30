@@ -240,6 +240,7 @@ class StageConfig(BaseModel):
 
     timeout_seconds: int = 600
     agent_backend: str = "claude"
+    agent_model: str | None = None
 
 
 class ValidationResult(BaseModel):

@@ -21,6 +21,7 @@ class AgentBackend(ABC):
         prompt: str,
         working_dir: Path,
         timeout: int,
+        model: str | None = None,
         output_schema: Path | None = None,
         debug_log_dir: Path | None = None,
     ) -> AgentResult:
@@ -30,6 +31,7 @@ class AgentBackend(ABC):
             prompt: The full prompt to send to the agent.
             working_dir: Working directory for the subprocess.
             timeout: Wall-clock timeout in seconds.
+            model: Optional model override for the agent CLI.
             output_schema: Path to a JSON Schema file for structured output.
             debug_log_dir: If set, save debug logs (prompt, stdout, stderr) to this dir.
 

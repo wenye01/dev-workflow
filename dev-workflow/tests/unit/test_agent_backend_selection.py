@@ -11,6 +11,7 @@ import pytest
 from agents import get_agent_backend
 from agents.claude import ClaudeBackend
 from agents.codex import CodexBackend
+from scripts.config import WorkflowConfig
 from scripts.models import AgentResult, StageConfig, StageContext, StageName
 from stages.implement import ImplementStage
 
@@ -46,10 +47,19 @@ class _FakeBackend:
 
     def invoke(self, **kwargs) -> AgentResult:  # pragma: no cover - simple test fake
         self._captured["working_dir"] = str(kwargs["working_dir"])
+        self._captured["model"] = kwargs.get("model")
         debug_log_dir = kwargs.get("debug_log_dir")
         if debug_log_dir is not None:
             debug_log_dir.mkdir(parents=True, exist_ok=True)
         return AgentResult(exit_code=0, stdout='{"ok": true}', parsed_output={"summary": "ok"})
+
+
+class _FakeFailingBackend:
+    def invoke(self, **kwargs) -> AgentResult:  # pragma: no cover - simple test fake
+        debug_log_dir = kwargs.get("debug_log_dir")
+        if debug_log_dir is not None:
+            debug_log_dir.mkdir(parents=True, exist_ok=True)
+        return AgentResult(exit_code=7, stderr="unknown model: bad-model")
 
 
 class TestImplementStageBackendSelection:
@@ -86,7 +96,42 @@ class TestImplementStageBackendSelection:
 
         assert captured["backend_name"] == "codex"
         assert captured["working_dir"] == str(worktree)
+        assert captured["model"] is None
         assert parsed == {"summary": "ok"}
+
+    def test_implement_invoke_passes_configured_model(self, monkeypatch: pytest.MonkeyPatch):
+        captured: dict[str, str] = {}
+
+        def _fake_get_backend(name: str):
+            captured["backend_name"] = name
+            return _FakeBackend(captured)
+
+        monkeypatch.setattr("stages.implement.get_agent_backend", _fake_get_backend)
+        monkeypatch.setattr(
+            "stages.implement.get_schema_path",
+            lambda _: Path(__file__).resolve().parents[2] / "schemas" / "implement-output.json",
+        )
+
+        stage = ImplementStage()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir(parents=True)
+
+            context = StageContext(
+                workflow_id="w1",
+                run_id="run-1",
+                spec_path=root / "spec.md",
+                project_path=root,
+                worktree_path=worktree,
+                current_stage=StageName.IMPLEMENT,
+            )
+            config = StageConfig(timeout_seconds=30, agent_backend="codex", agent_model="gpt-5.4")
+
+            stage._invoke_agent("test", context, config)
+
+        assert captured["backend_name"] == "codex"
+        assert captured["model"] == "gpt-5.4"
 
     def test_execute_synthesizes_task_when_task_list_is_empty(self, monkeypatch: pytest.MonkeyPatch):
         captured: dict[str, str] = {}
@@ -122,8 +167,66 @@ class TestImplementStageBackendSelection:
         assert "Demo Spec" in captured["prompt"]
         assert output.output_data["all_tasks_completed"] is True
 
+    def test_implement_failure_reports_backend_model_and_debug_dir(self, monkeypatch: pytest.MonkeyPatch):
+        def _fake_get_backend(name: str):
+            return _FakeFailingBackend()
+
+        monkeypatch.setattr("stages.implement.get_agent_backend", _fake_get_backend)
+        monkeypatch.setattr(
+            "stages.implement.get_schema_path",
+            lambda _: Path(__file__).resolve().parents[2] / "schemas" / "implement-output.json",
+        )
+
+        stage = ImplementStage()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir(parents=True)
+
+            context = StageContext(
+                workflow_id="w1",
+                run_id="run-1",
+                spec_path=root / "spec.md",
+                project_path=root,
+                worktree_path=worktree,
+                current_stage=StageName.IMPLEMENT,
+            )
+            config = StageConfig(timeout_seconds=30, agent_backend="claude", agent_model="bad-model")
+
+            with pytest.raises(RuntimeError) as exc_info:
+                stage._invoke_agent("test", context, config)
+
+        message = str(exc_info.value)
+        assert "backend=claude" in message
+        assert "model=bad-model" in message
+        assert "debug_log_dir=" in message
+        assert "unknown model: bad-model" in message
+
 
 class TestVerboseAgentInvocation:
+    def test_claude_backend_adds_model_flag(self, monkeypatch: pytest.MonkeyPatch):
+        captured: dict[str, object] = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _FakeProcess(
+                stdout=json.dumps({"result": json.dumps({"ok": True})}),
+            )
+
+        monkeypatch.setattr("agents.claude.subprocess.Popen", _fake_popen)
+
+        backend = ClaudeBackend()
+        result = backend.invoke(
+            prompt="test prompt",
+            working_dir=Path("."),
+            timeout=1,
+            model="claude-sonnet-4-20250514",
+        )
+
+        assert "--model" in captured["cmd"]
+        assert "claude-sonnet-4-20250514" in captured["cmd"]
+        assert result.parsed_output == {"ok": True}
+
     def test_claude_backend_enables_verbose_flag(self, monkeypatch: pytest.MonkeyPatch):
         captured: dict[str, object] = {}
 
@@ -167,3 +270,56 @@ class TestVerboseAgentInvocation:
 
         assert captured["kwargs"]["env"]["RUST_LOG"] == "debug"
         assert result.parsed_output == {"ok": True}
+
+    def test_codex_backend_adds_model_flag(self, monkeypatch: pytest.MonkeyPatch):
+        captured: dict[str, object] = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["kwargs"] = kwargs
+            return _FakeProcess(
+                stdout='{"structured_output": {"ok": true}}\n',
+            )
+
+        monkeypatch.setattr("agents.codex.subprocess.Popen", _fake_popen)
+
+        backend = CodexBackend()
+        result = backend.invoke(
+            prompt="test prompt",
+            working_dir=Path("."),
+            timeout=1,
+            model="gpt-5.4",
+        )
+
+        assert "--model" in captured["cmd"]
+        assert "gpt-5.4" in captured["cmd"]
+        assert result.parsed_output == {"ok": True}
+
+
+class TestWorkflowConfigModelSelection:
+    def test_get_model_for_stage_uses_stage_override_then_default(self):
+        config = WorkflowConfig.model_validate({
+            "agent": {
+                "default": "codex",
+                "model": "gpt-5.4",
+            },
+            "stages": {
+                "whitebox_test": {
+                    "agent": "claude",
+                    "model": "claude-sonnet-4-20250514",
+                },
+            },
+        })
+
+        assert config.get_agent_for_stage("whitebox_test") == "claude"
+        assert config.get_model_for_stage("whitebox_test") == "claude-sonnet-4-20250514"
+        assert config.get_model_for_stage("review") == "gpt-5.4"
+
+    def test_get_model_for_stage_returns_none_when_unset(self):
+        config = WorkflowConfig.model_validate({
+            "agent": {
+                "default": "codex",
+            },
+        })
+
+        assert config.get_model_for_stage("review") is None

@@ -28,7 +28,7 @@ from scripts.models import (
     get_run_state_dir,
 )
 from scripts.output_schema import get_schema_path, validate_agent_output
-from stages.base import BaseStage
+from stages.base import BaseStage, format_agent_failure
 
 logger = logging.getLogger(__name__)
 
@@ -192,13 +192,29 @@ class AdjudicateStage(BaseStage):
             prompt=prompt,
             working_dir=context.worktree_path,
             timeout=config.timeout_seconds,
+            model=config.agent_model,
             output_schema=schema_path,
             debug_log_dir=debug_log_dir,
         )
         if result.timed_out:
-            raise TimeoutError(f"Adjudication agent timed out after {config.timeout_seconds}s")
+            raise TimeoutError(format_agent_failure(
+                stage_label="Adjudicate",
+                agent_backend=config.agent_backend,
+                agent_model=config.agent_model,
+                timeout_seconds=config.timeout_seconds,
+                debug_log_dir=debug_log_dir,
+                reason="agent timed out",
+            ))
         if result.exit_code != 0:
-            raise RuntimeError(f"Agent invocation failed (exit_code={result.exit_code}): {result.stderr}")
+            raise RuntimeError(format_agent_failure(
+                stage_label="Adjudicate",
+                agent_backend=config.agent_backend,
+                agent_model=config.agent_model,
+                timeout_seconds=config.timeout_seconds,
+                debug_log_dir=debug_log_dir,
+                exit_code=result.exit_code,
+                reason=result.stderr or "agent returned non-zero exit status",
+            ))
         return result.parsed_output or {}
 
     def _load_feedback(self, path: Path) -> ReviewFeedback:

@@ -100,3 +100,31 @@ class BaseStage(ABC):
             errors.append("Missing property: name")
 
         return errors
+
+
+def format_agent_target(agent_backend: str, agent_model: str | None) -> str:
+    """Return a compact description of the configured agent target."""
+    return f"backend={agent_backend}, model={agent_model or '<default>'}"
+
+
+def format_agent_failure(
+    *,
+    stage_label: str,
+    agent_backend: str,
+    agent_model: str | None,
+    timeout_seconds: int,
+    debug_log_dir: Path,
+    reason: str,
+    exit_code: int | None = None,
+) -> str:
+    """Return a detailed agent failure message for CLI/startup debugging."""
+    details = [
+        f"{stage_label} agent invocation failed",
+        f"target=({format_agent_target(agent_backend, agent_model)})",
+        f"timeout={timeout_seconds}s",
+        f"debug_log_dir={debug_log_dir}",
+    ]
+    if exit_code is not None:
+        details.append(f"exit_code={exit_code}")
+    details.append(f"reason={reason}")
+    return "; ".join(details)
