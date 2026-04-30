@@ -1,6 +1,6 @@
 ---
 name: dev-workflow-init
-description: 初始化项目的 .dev-workflow/ 上下文目录。分析项目结构，生成分层上下文文件（must-inject / index-only / user-customizable）。
+description: 手动触发的开发工作流初始化。用于 `/dev-workflow-init`：分析当前项目，生成 `.dev-workflow/` 上下文目录和分层文档（must-inject / index-only / user-customizable）。
 disable-model-invocation: true
 allowed-tools:
   - Bash
@@ -15,11 +15,18 @@ allowed-tools:
 # 开发工作流初始化技能
 
 你负责为项目初始化 `.dev-workflow/` 上下文目录。基于 Anthropic 的 Context Engineering 原则，将上下文分为三层：
-构建时应该多使用subagent各自探索需要的内容，并创建文件。
 
 1. **Must-inject**（始终注入到 agent prompt 中）：`.dev-workflow/docs/project.md`、`.dev-workflow/docs/commands.md`
 2. **User-customizable**（用户自定义，同样注入）：`.dev-workflow/docs/custom/` 目录下的所有文件
 3. **Index-only**（仅注入索引，agent 按需读取）：`.dev-workflow/docs/INDEX.md` → `.dev-workflow/docs/references/`
+
+## 执行原则
+
+- 这是手动触发技能，不需要根据普通对话自动触发。
+- 优先使用并行探索来缩短分析时间，但不要把探索结果直接写入文件；先汇总、校验，再生成文档。
+- 只生成和工作流上下文直接相关的文件，避免额外 README、指南或与运行无关的说明文档。
+- 不覆盖 `.dev-workflow/docs/custom/` 中已有用户文件。
+- 模板只作为结构参考，不要机械填充未知信息；无法确定的命令标记为 `TODO: verify`。
 
 ## 目标目录结构
 
@@ -74,47 +81,13 @@ Glob: src/**/*, tests/**/*, lib/**/*
 
 ### 2. 生成 Tier 1 文件（Must-inject）
 
-#### `docs/project.md`（精简，约50行以内）
+生成 `docs/project.md`（精简，约50行以内）和 `docs/commands.md`（精确命令，约30行以内）。
 
-```markdown
-# {项目名称}
+模板位于：
+- `assets/templates/project.md`
+- `assets/templates/commands.md`
 
-{一句话描述项目用途}
-
-## 基本信息
-- 语言：{语言} {版本}
-- 框架：{主要框架}
-- 关键依赖：{列出最重要的5个依赖}
-
-## 目录结构
-{两层级目录树}
-
-## 架构概述
-{1-2句话描述整体架构模式}
-```
-
-#### `docs/commands.md`（精确命令，约30行以内）
-
-```markdown
-# 项目命令
-
-## 安装依赖
-`{安装命令}`
-
-## 运行测试
-- 全部测试：`{命令}`
-- 单个文件：`{命令}`
-
-## 代码检查
-- Lint：`{命令}`
-- Format：`命令}`
-
-## 构建
-`{构建命令}`
-
-## 本地运行
-`{启动命令}`
-```
+读取模板后按项目实际情况填充。不要为了完整而猜测命令；不确定时写 `TODO: verify <reason>`。
 
 ### 3. 生成 Tier 3 文件（Index-only）
 
@@ -173,24 +146,7 @@ Glob: src/**/*, tests/**/*, lib/**/*
 - **如果 `custom/` 为空或不存在**：根据代码推断生成草稿 `custom/style.md`
 
 `docs/custom/style.md` 草稿内容：
-```markdown
-# 编码风格
-
-> 此文件由 init 自动生成草稿，请根据项目实际情况修改。
-> custom/ 目录下的所有 .md 文件会自动注入到 agent 的上下文中。
-
-## 命名约定
-{从代码推断的命名模式}
-
-## 导入排序
-{推断的导入顺序}
-
-## 错误处理
-{推断的错误处理模式}
-
-## 文件组织
-{推断的文件组织方式}
-```
+使用 `assets/templates/style.md` 作为结构参考，根据代码推断命名、导入、错误处理和文件组织模式。
 
 ### 5. 与用户确认
 

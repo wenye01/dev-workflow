@@ -34,6 +34,23 @@ from stages import get_stage
 logger = logging.getLogger(__name__)
 
 
+def _resolve_project_path(project: str | None) -> Path:
+    """Resolve the target project root for workflow state and config."""
+    return Path(project).resolve() if project else Path.cwd()
+
+
+def _resolve_config_path(project_path: Path, config: str | None) -> Path | None:
+    """Prefer an explicit config path, otherwise use the target project's config file."""
+    if config:
+        return Path(config).resolve()
+    return project_path / ".dev-workflow" / "config.yml"
+
+
+def _get_run_root(project_path: Path) -> Path:
+    """Get the workflow state root under the target project."""
+    return project_path / ".dev-workflow" / "run"
+
+
 def _run_workflow(engine: WorkflowEngine, config: WorkflowConfig, spec_path: Path) -> int:
     """Main execution loop: iterate through stages until workflow completes or fails."""
     instance = engine.instance
@@ -235,8 +252,8 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Error: --slug is required", file=sys.stderr)
         return 1
 
-    project_path = Path(args.project).resolve() if args.project else Path.cwd()
-    config_path = Path(args.config).resolve() if args.config else None
+    project_path = _resolve_project_path(args.project)
+    config_path = _resolve_config_path(project_path, args.config)
     config = load_config(config_path)
 
     spec_content = spec_path.read_text(encoding="utf-8")
@@ -263,7 +280,8 @@ def cmd_start(args: argparse.Namespace) -> int:
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    run_dir = Path.cwd() / ".dev-workflow" / "run"
+    project_path = _resolve_project_path(getattr(args, "project", None))
+    run_dir = _get_run_root(project_path)
     if args.workflow_id:
         state_files = list(run_dir.glob(f"{args.workflow_id}/state.json"))
         if not state_files:
@@ -306,7 +324,8 @@ def cmd_status(args: argparse.Namespace) -> int:
 def cmd_resume(args: argparse.Namespace) -> int:
     from scripts.engine import restore_engine
 
-    run_dir = Path.cwd() / ".dev-workflow" / "run"
+    project_path = _resolve_project_path(getattr(args, "project", None))
+    run_dir = _get_run_root(project_path)
     state_files = list(run_dir.glob("*/state.json"))
     if not state_files:
         print("No interrupted workflow found.", file=sys.stderr)
@@ -314,7 +333,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
     state_path = max(state_files, key=lambda p: p.stat().st_mtime)
     try:
-        config = load_config()
+        config = load_config(_resolve_config_path(project_path, getattr(args, "config", None)))
         engine = restore_engine(state_path, config)
     except FileNotFoundError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -323,7 +342,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
     instance = engine.instance
     spec_path = instance.spec.spec_path if instance.spec and instance.spec.spec_path else Path()
     if not spec_path.exists():
-        candidates = list((Path.cwd() / ".dev-workflow").glob("*.md"))
+        candidates = list((project_path / ".dev-workflow").glob("*.md"))
         if candidates:
             spec_path = candidates[0]
         else:
@@ -334,7 +353,8 @@ def cmd_resume(args: argparse.Namespace) -> int:
 
 
 def cmd_abort(args: argparse.Namespace) -> int:
-    run_dir = Path.cwd() / ".dev-workflow" / "run"
+    project_path = _resolve_project_path(getattr(args, "project", None))
+    run_dir = _get_run_root(project_path)
     state_files = list(run_dir.glob("*/state.json"))
     if not state_files:
         print("No running workflow found.", file=sys.stderr)
@@ -391,13 +411,17 @@ def main() -> int:
     status_parser = subparsers.add_parser("status", help="Show workflow status")
     status_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
     status_parser.add_argument("--json", action="store_true", help="Output as JSON")
+    status_parser.add_argument("--project", default=None, help="Target project root path")
 
     resume_parser = subparsers.add_parser("resume", help="Resume interrupted workflow")
     resume_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
+    resume_parser.add_argument("--project", default=None, help="Target project root path")
+    resume_parser.add_argument("--config", default=None, help="Configuration file path")
 
     abort_parser = subparsers.add_parser("abort", help="Terminate running workflow")
     abort_parser.add_argument("--workflow-id", default=None, help="Specific workflow ID")
     abort_parser.add_argument("--force", action="store_true", help="Kill running agent process")
+    abort_parser.add_argument("--project", default=None, help="Target project root path")
 
     args = parser.parse_args()
     if args.command is None:
