@@ -46,10 +46,6 @@ class ImplementStage(BaseStage):
             errors.append(f"Spec file not found: {context.spec_path}")
         if not context.worktree_path.exists():
             errors.append(f"Worktree not found: {context.worktree_path}")
-
-        tasks_path = get_run_state_dir(context.project_path, context.run_id) / "tasks.json"
-        if not tasks_path.exists():
-            errors.append("tasks.json not found in worktree")
         return ValidationResult(is_valid=len(errors) == 0, errors=errors)
 
     def build_agent_context(self, context: StageContext) -> AgentContext:
@@ -60,12 +56,6 @@ class ImplementStage(BaseStage):
                 "worktree_path": str(context.worktree_path),
             },
         )
-
-        tasks_path = get_run_state_dir(context.project_path, context.run_id) / "tasks.json"
-        if tasks_path.exists():
-            pending = pending_or_in_progress_tasks(tasks_path)
-            if pending:
-                ctx.stage_specific_context["current_task"] = pending[0]
 
         progress_path = get_run_state_dir(context.project_path, context.run_id) / "progress.json"
         if progress_path.exists():
@@ -80,31 +70,26 @@ class ImplementStage(BaseStage):
     def execute(self, context: StageContext, config: StageConfig) -> StageOutput:
         state_dir = get_run_state_dir(context.project_path, context.run_id)
         progress_path = state_dir / "progress.json"
-        tasks_path = get_run_state_dir(context.project_path, context.run_id) / "tasks.json"
-        tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
+        tasks_path = state_dir / "tasks.json"
         candidates = pending_or_in_progress_tasks(tasks_path)
-        logger.info("Tasks loaded: %d total, %d actionable", len(tasks), len(candidates))
+        logger.info("Issue-backed tasks loaded: %d actionable", len(candidates))
 
-        if not candidates:
-            logger.info("No actionable tasks, synthesizing a single implementation task from the spec")
+        if candidates:
+            current_task = candidates[0]
+            task_id = current_task.get("id", "unknown")
+            synthetic_task = False
+            self._mark_task_in_progress(tasks_path, task_id)
+        else:
+            logger.info("No actionable issue-backed tasks, implementing directly from spec")
             current_task = {
-                "id": "task-1",
-                "title": "Implement full specification",
+                "id": "spec-implementation",
+                "title": "Implement specification",
                 "description": context.spec_path.read_text(encoding="utf-8") if context.spec_path.exists() else "",
                 "acceptance_criteria": [],
                 "status": "in_progress",
             }
             task_id = current_task["id"]
             synthetic_task = True
-        else:
-            current_task = candidates[0]
-            task_id = current_task.get("id", "unknown")
-            synthetic_task = False
-            for task in tasks:
-                if task.get("id") == task_id:
-                    task["status"] = "in_progress"
-                    break
-            tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
 
         task_prompt = self._build_task_prompt(current_task, context)
         logger.info("Task prompt built: %d chars", len(task_prompt))
@@ -113,11 +98,8 @@ class ImplementStage(BaseStage):
             self._invoke_agent(task_prompt, context, config)
         except Exception as exc:
             logger.error("Agent invocation failed for task %s: %s", task_id, exc)
-            for task in tasks:
-                if task.get("id") == task_id:
-                    task["status"] = "blocked"
-                    break
-            tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
+            if not synthetic_task:
+                self._mark_task_blocked(tasks_path, task_id)
             return StageOutput(stage_name=self.name, verdict=Verdict.FAIL, error_message=str(exc))
 
         linked_issue_ids = [] if synthetic_task else mark_task_completed(tasks_path, task_id)
@@ -289,3 +271,23 @@ class ImplementStage(BaseStage):
             pass
 
         progress_path.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _mark_task_in_progress(self, tasks_path: Path, task_id: str) -> None:
+        if not tasks_path.exists():
+            return
+        tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
+        for task in tasks:
+            if task.get("id") == task_id:
+                task["status"] = "in_progress"
+                break
+        tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    def _mark_task_blocked(self, tasks_path: Path, task_id: str) -> None:
+        if not tasks_path.exists():
+            return
+        tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
+        for task in tasks:
+            if task.get("id") == task_id:
+                task["status"] = "blocked"
+                break
+        tasks_path.write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")

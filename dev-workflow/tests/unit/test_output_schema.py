@@ -422,7 +422,7 @@ class TestBootstrapValidateOutput:
         with tempfile.TemporaryDirectory() as tmp:
             workflow_dir = Path(tmp) / ".dev-workflow" / "run"
             workflow_dir.mkdir(parents=True)
-            for name in ["tasks.json", "progress.json", "stage-history.json"]:
+            for name in ["progress.json", "stage-history.json"]:
                 (workflow_dir / name).write_text("{}", encoding="utf-8")
             state_path = workflow_dir / "state.json"
             state_path.write_text(json.dumps({"status": "running"}), encoding="utf-8")
@@ -434,7 +434,7 @@ class TestBootstrapValidateOutput:
         with tempfile.TemporaryDirectory() as tmp:
             workflow_dir = Path(tmp) / ".dev-workflow" / "run"
             workflow_dir.mkdir(parents=True)
-            for name in ["tasks.json", "progress.json", "stage-history.json"]:
+            for name in ["progress.json", "stage-history.json"]:
                 (workflow_dir / name).write_text("{}", encoding="utf-8")
             state_path = workflow_dir / "state.json"
             state_path.write_text(json.dumps({"id": "123"}), encoding="utf-8")
@@ -442,6 +442,24 @@ class TestBootstrapValidateOutput:
             result = self.stage.validate_output(output, Path(tmp))
             assert result.is_valid is False
             assert any("status" in error for error in result.errors)
+
+    def test_sync_workflow_context_excludes_run_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project_root = Path(tmp) / "project"
+            worktree_root = Path(tmp) / "worktree"
+            source = project_root / ".dev-workflow"
+            (source / "docs").mkdir(parents=True)
+            (source / "run" / "old-run").mkdir(parents=True)
+            (source / "docs" / "project.md").write_text("project context", encoding="utf-8")
+            (source / "config.yml").write_text("agent:\n  default: codex\n", encoding="utf-8")
+            (source / "run" / "old-run" / "state.json").write_text("{}", encoding="utf-8")
+            worktree_root.mkdir(parents=True)
+
+            self.stage._sync_workflow_context(project_root, worktree_root)
+
+            assert (worktree_root / ".dev-workflow" / "docs" / "project.md").exists()
+            assert (worktree_root / ".dev-workflow" / "config.yml").exists()
+            assert not (worktree_root / ".dev-workflow" / "run").exists()
 
 
 class TestFinishValidateOutput:

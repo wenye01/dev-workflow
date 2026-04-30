@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import shutil
 from pathlib import Path
 
 from scripts.models import (
@@ -47,6 +48,8 @@ class BootstrapStage(BaseStage):
             logger.info("Bootstrap starting: project_path=%s, run_id=%s", context.project_path, context.run_id)
             worktree_path = self._create_worktree(context)
             logger.info("Worktree created: %s", worktree_path)
+            self._sync_workflow_context(context.project_path, worktree_path)
+            logger.info("Workflow context synced to worktree: %s", worktree_path / ".dev-workflow")
             state_dir = self._init_state_dir(context)
             logger.info("State dir initialized: %s", state_dir)
             self._write_initial_state(state_dir, worktree_path, context)
@@ -73,7 +76,7 @@ class BootstrapStage(BaseStage):
         if state_dir is None:
             return ValidationResult(is_valid=False, errors=["No result path in output"])
 
-        expected_files = ["state.json", "tasks.json", "progress.json", "stage-history.json"]
+        expected_files = ["state.json", "progress.json", "stage-history.json"]
 
         for filename in expected_files:
             filepath = state_dir / filename
@@ -102,27 +105,79 @@ class BootstrapStage(BaseStage):
         worktrees_base.mkdir(parents=True, exist_ok=True)
         worktree_path = worktrees_base / run_id
 
-        # Create worktree via git
-        try:
+        if worktree_path.exists():
+            if self._is_registered_worktree(project_path, worktree_path):
+                self._remove_worktree(project_path, worktree_path)
+            elif worktree_path.is_dir() and not any(worktree_path.iterdir()):
+                worktree_path.rmdir()
+            else:
+                raise RuntimeError(f"Worktree path already exists: {worktree_path}")
+
+        result = subprocess.run(
+            ["git", "worktree", "add", "-B", run_id, str(worktree_path)],
+            cwd=str(project_path),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            stdout = result.stdout.strip()
+            message_parts = [f"git worktree add failed for {worktree_path}"]
+            if stderr:
+                message_parts.append(stderr)
+            elif stdout:
+                message_parts.append(stdout)
+            raise RuntimeError(": ".join(message_parts))
+
+        return worktree_path
+
+    def _is_registered_worktree(self, project_path: Path, worktree_path: Path) -> bool:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            cwd=str(project_path),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            return False
+
+        target = worktree_path.resolve()
+        for line in result.stdout.splitlines():
+            if line.startswith("worktree "):
+                if Path(line.removeprefix("worktree ").strip()).resolve() == target:
+                    return True
+        return False
+
+    def _remove_worktree(self, project_path: Path, worktree_path: Path) -> None:
+        result = subprocess.run(
+            ["git", "worktree", "remove", "--force", str(worktree_path)],
+            cwd=str(project_path),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return
+
+        git_dir = worktree_path / ".git"
+        if git_dir.exists() and git_dir.is_dir():
+            shutil.rmtree(worktree_path)
             subprocess.run(
-                ["git", "worktree", "add", str(worktree_path), "-b", run_id],
+                ["git", "worktree", "prune"],
                 cwd=str(project_path),
                 capture_output=True,
                 text=True,
-                check=True,
+                check=False,
             )
-        except subprocess.CalledProcessError:
-            # Fallback: create directory and init git
-            worktree_path.mkdir(parents=True, exist_ok=True)
-            subprocess.run(
-                ["git", "init"], cwd=str(worktree_path), capture_output=True, check=True,
-            )
-            subprocess.run(
-                ["git", "checkout", "-b", run_id],
-                cwd=str(worktree_path), capture_output=True, check=True,
-            )
+            return
 
-        return worktree_path
+        stderr = result.stderr.strip()
+        stdout = result.stdout.strip()
+        message_parts = [f"git worktree remove failed for {worktree_path}"]
+        if stderr:
+            message_parts.append(stderr)
+        elif stdout:
+            message_parts.append(stdout)
+        raise RuntimeError(": ".join(message_parts))
 
     def _init_state_dir(self, context: StageContext) -> Path:
         """Create .dev-workflow/run/{run_id}/ state directory in project root."""
@@ -130,11 +185,30 @@ class BootstrapStage(BaseStage):
         state_dir.mkdir(parents=True, exist_ok=True)
 
         # Create empty artifact files
-        (state_dir / "tasks.json").write_text("[]", encoding="utf-8")
         (state_dir / "progress.json").write_text("{}", encoding="utf-8")
         (state_dir / "stage-history.json").write_text("[]", encoding="utf-8")
 
         return state_dir
+
+    def _sync_workflow_context(self, project_path: Path, worktree_path: Path) -> None:
+        """Sync .dev-workflow context files to the worktree, excluding runtime state."""
+        source_root = project_path / ".dev-workflow"
+        if not source_root.exists():
+            return
+
+        dest_root = worktree_path / ".dev-workflow"
+        dest_root.mkdir(parents=True, exist_ok=True)
+
+        for child in source_root.iterdir():
+            if child.name == "run":
+                continue
+
+            dest = dest_root / child.name
+            if child.is_dir():
+                shutil.copytree(child, dest, dirs_exist_ok=True)
+            else:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(child, dest)
 
     def _write_initial_state(
         self, state_dir: Path, worktree_path: Path, context: StageContext,
@@ -161,9 +235,19 @@ class BootstrapStage(BaseStage):
 
     def _create_initial_commit(self, worktree_path: Path, context: StageContext) -> None:
         """Create initial git commit in worktree."""
-        subprocess.run(
+        result = subprocess.run(
             ["git", "commit", "--allow-empty", "-m",
              f"workflow: initialize {context.run_id}"],
             cwd=str(worktree_path),
             capture_output=True,
+            text=True,
         )
+        if result.returncode != 0:
+            stderr = result.stderr.strip()
+            stdout = result.stdout.strip()
+            message_parts = [f"git commit failed in {worktree_path}"]
+            if stderr:
+                message_parts.append(stderr)
+            elif stdout:
+                message_parts.append(stdout)
+            raise RuntimeError(": ".join(message_parts))

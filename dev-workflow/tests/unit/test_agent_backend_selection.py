@@ -149,7 +149,6 @@ class TestImplementStageBackendSelection:
             worktree.mkdir(parents=True)
             state_dir = root / ".dev-workflow" / "run" / "run-1"
             state_dir.mkdir(parents=True)
-            (state_dir / "tasks.json").write_text("[]", encoding="utf-8")
             (state_dir / "progress.json").write_text("{}", encoding="utf-8")
             spec_path = root / "spec.md"
             spec_path.write_text("# Demo Spec", encoding="utf-8")
@@ -166,6 +165,51 @@ class TestImplementStageBackendSelection:
 
         assert "Demo Spec" in captured["prompt"]
         assert output.output_data["all_tasks_completed"] is True
+
+    def test_execute_prefers_issue_backed_tasks_when_present(self, monkeypatch: pytest.MonkeyPatch):
+        captured: dict[str, str] = {}
+
+        def _fake_invoke_agent(self, prompt: str, context: StageContext, config: StageConfig):
+            captured["prompt"] = prompt
+            return {}
+
+        monkeypatch.setattr(ImplementStage, "_invoke_agent", _fake_invoke_agent)
+
+        stage = ImplementStage()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir(parents=True)
+            state_dir = root / ".dev-workflow" / "run" / "run-1"
+            state_dir.mkdir(parents=True)
+            (state_dir / "tasks.json").write_text(json.dumps([
+                {
+                    "id": "fix-1",
+                    "title": "Fix review issue",
+                    "description": "Address a review finding",
+                    "status": "pending",
+                    "linked_issue_ids": [],
+                }
+            ]), encoding="utf-8")
+            (state_dir / "progress.json").write_text("{}", encoding="utf-8")
+            spec_path = root / "spec.md"
+            spec_path.write_text("# Demo Spec", encoding="utf-8")
+
+            context = StageContext(
+                workflow_id="w1",
+                run_id="run-1",
+                spec_path=spec_path,
+                project_path=root,
+                worktree_path=worktree,
+                current_stage=StageName.IMPLEMENT,
+            )
+            output = stage.execute(context, StageConfig(timeout_seconds=30, agent_backend="codex"))
+
+            tasks = json.loads((state_dir / "tasks.json").read_text(encoding="utf-8"))
+
+        assert "Fix review issue" in captured["prompt"]
+        assert output.output_data["all_tasks_completed"] is True
+        assert tasks[0]["status"] == "completed"
 
     def test_implement_failure_reports_backend_model_and_debug_dir(self, monkeypatch: pytest.MonkeyPatch):
         def _fake_get_backend(name: str):
