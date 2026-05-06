@@ -71,6 +71,11 @@ agent:
   default: codex
   model: gpt-5.4
 
+workflow:
+  max_retries: 3
+  enable_followup_review_loops: true
+  max_review_loops: 3
+
 stages:
   review:
     model: gpt-5.5
@@ -83,6 +88,10 @@ stages:
 这里的模型名会直接透传给对应 CLI：
 - `codex` backend 使用 `codex exec --model <name>`
 - `claude` backend 使用 `claude -p --model <name>`
+
+Review 回环控制：
+- `enable_followup_review_loops: false` 表示第一轮 `review -> adjudicate -> implement` 修复完成后，不再进入下一轮 review，直接进入后续测试阶段。
+- `max_review_loops` 默认 `3`。开启 follow-up review 回环时，超过该次数后会强制通过 review 回环，进入后续流程。
 
 ## 项目结构
 

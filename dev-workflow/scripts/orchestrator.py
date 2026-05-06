@@ -120,17 +120,39 @@ def _run_workflow(engine: WorkflowEngine, config: WorkflowConfig, spec_path: Pat
         engine.add_stage_execution(execution)
 
         output_validation = stage.validate_output(output, context.worktree_path)
+        output_is_valid = output_validation.is_valid
         if not output_validation.is_valid:
             logger.error("Stage %s output validation failed: %s", current_stage.value, output_validation.errors)
             output.verdict = Verdict.FAIL
             verdict = Verdict.FAIL
             execution.status = StageStatus.FAILED
 
+        if (
+            output_is_valid
+            and current_stage == StageName.REVIEW
+            and verdict == Verdict.FAIL
+            and _should_force_review_pass_after_loop_limit(instance, config)
+        ):
+            reason = _review_loop_limit_reason(instance, config)
+            logger.warning("Forcing review pass because review loop limit was reached: %s", reason)
+            output.verdict = Verdict.PASS
+            output.output_data["forced_pass_reason"] = reason
+            verdict = Verdict.PASS
+            execution.status = StageStatus.COMPLETED
+
         if current_stage == StageName.BOOTSTRAP and verdict == Verdict.PASS:
             _update_worktree_path(instance, output)
         if current_stage == StageName.IMPLEMENT and verdict == Verdict.PASS:
             more_tasks = (output.output_data or {}).get("more_tasks", False)
-            engine.set_tasks_complete(not more_tasks)
+            all_tasks_done = not more_tasks
+            engine.set_tasks_complete(all_tasks_done)
+            engine.set_skip_review_after_implement(
+                all_tasks_done
+                and _is_review_backed_implement(output)
+                and _should_skip_review_after_review_fix(instance, config)
+            )
+        elif current_stage != StageName.IMPLEMENT:
+            engine.set_skip_review_after_implement(False)
 
         engine.set_verdict(verdict)
         if current_stage == StageName.ADJUDICATE and verdict == Verdict.PASS:
@@ -226,6 +248,50 @@ def _trigger_max_retries(engine: WorkflowEngine, stage: StageName) -> None:
 
 def _has_max_retries_trigger(stage: StageName) -> bool:
     return stage in (StageName.REVIEW, StageName.WHITEBOX_TEST, StageName.BLACKBOX_TEST)
+
+
+def _is_review_backed_implement(output: StageOutput) -> bool:
+    return (output.output_data or {}).get("source_stage") == StageName.REVIEW.value
+
+
+def _should_skip_review_after_review_fix(
+    instance: WorkflowInstance,
+    config: WorkflowConfig,
+) -> bool:
+    failures = _review_failure_count(instance)
+    if failures == 0:
+        return False
+    if not config.workflow.enable_followup_review_loops:
+        return True
+    return failures >= max(config.workflow.max_review_loops, 0)
+
+
+def _should_force_review_pass_after_loop_limit(
+    instance: WorkflowInstance,
+    config: WorkflowConfig,
+) -> bool:
+    failures = _review_failure_count(instance)
+    if not config.workflow.enable_followup_review_loops:
+        return failures > 1
+    return failures > max(config.workflow.max_review_loops, 0)
+
+
+def _review_loop_limit_reason(instance: WorkflowInstance, config: WorkflowConfig) -> str:
+    failures = _review_failure_count(instance)
+    if not config.workflow.enable_followup_review_loops:
+        return (
+            "enable_followup_review_loops=false; only the first "
+            "review->adjudicate->implement loop is allowed"
+        )
+    return f"review failure count {failures} exceeded max_review_loops={config.workflow.max_review_loops}"
+
+
+def _review_failure_count(instance: WorkflowInstance) -> int:
+    return sum(
+        1
+        for execution in instance.stage_executions
+        if execution.stage_name == StageName.REVIEW and execution.status == StageStatus.FAILED
+    )
 
 
 def _update_worktree_path(instance: WorkflowInstance, output: StageOutput) -> None:

@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import pytest
 
+from scripts.config import WorkflowConfig
 from scripts.engine import WorkflowEngine
-from scripts.models import StageName, Verdict, WorkflowInstance
-from scripts.orchestrator import _trigger_transition
+from scripts.models import StageExecution, StageName, StageOutput, StageStatus, Verdict, WorkflowInstance
+from scripts.orchestrator import (
+    _is_review_backed_implement,
+    _should_force_review_pass_after_loop_limit,
+    _should_skip_review_after_review_fix,
+    _trigger_transition,
+)
 
 
 class TestOrchestratorTransitions:
@@ -25,6 +31,16 @@ class TestOrchestratorTransitions:
 
         assert transitioned is True
         assert instance.current_stage == StageName.IMPLEMENT
+
+    def test_implement_can_skip_followup_review_when_loop_policy_requests_it(self):
+        instance, engine = self._make_engine(StageName.IMPLEMENT)
+        engine.set_tasks_complete(True)
+        engine.set_skip_review_after_implement(True)
+
+        transitioned = _trigger_transition(engine, StageName.IMPLEMENT, Verdict.PASS)
+
+        assert transitioned is True
+        assert instance.current_stage == StageName.WHITEBOX_TEST
 
     def test_implement_fail_transitions_to_failed(self):
         instance, engine = self._make_engine(StageName.IMPLEMENT)
@@ -190,3 +206,73 @@ class TestOrchestratorTransitions:
 
         assert transitioned is True
         assert instance.current_stage == expected_stage
+
+
+class TestReviewLoopPolicy:
+    @staticmethod
+    def _instance_with_review_failures(count: int) -> WorkflowInstance:
+        return WorkflowInstance(
+            slug="demo",
+            stage_executions=[
+                StageExecution(
+                    stage_name=StageName.REVIEW,
+                    status=StageStatus.FAILED,
+                )
+                for _ in range(count)
+            ],
+        )
+
+    def test_review_backed_implement_detection_uses_output_source_stage(self):
+        output = StageOutput(
+            stage_name=StageName.IMPLEMENT,
+            verdict=Verdict.PASS,
+            output_data={"source_stage": "review"},
+        )
+
+        assert _is_review_backed_implement(output) is True
+
+    def test_disabled_followup_review_loops_skip_after_first_review_fix(self):
+        config = WorkflowConfig.model_validate({
+            "workflow": {
+                "enable_followup_review_loops": False,
+                "max_review_loops": 3,
+            },
+        })
+        instance = self._instance_with_review_failures(1)
+
+        assert _should_skip_review_after_review_fix(instance, config) is True
+        assert _should_force_review_pass_after_loop_limit(instance, config) is False
+
+    def test_review_loop_limit_skips_review_after_configured_fix_count(self):
+        config = WorkflowConfig.model_validate({
+            "workflow": {
+                "enable_followup_review_loops": True,
+                "max_review_loops": 3,
+            },
+        })
+
+        assert _should_skip_review_after_review_fix(
+            self._instance_with_review_failures(2),
+            config,
+        ) is False
+        assert _should_skip_review_after_review_fix(
+            self._instance_with_review_failures(3),
+            config,
+        ) is True
+
+    def test_review_loop_limit_forces_pass_only_after_exceeding_limit(self):
+        config = WorkflowConfig.model_validate({
+            "workflow": {
+                "enable_followup_review_loops": True,
+                "max_review_loops": 3,
+            },
+        })
+
+        assert _should_force_review_pass_after_loop_limit(
+            self._instance_with_review_failures(3),
+            config,
+        ) is False
+        assert _should_force_review_pass_after_loop_limit(
+            self._instance_with_review_failures(4),
+            config,
+        ) is True

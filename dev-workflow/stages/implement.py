@@ -146,6 +146,8 @@ class ImplementStage(BaseStage):
                 "more_tasks": len(remaining) > 0,
                 "all_tasks_completed": len(remaining) == 0,
                 "commit_sha": commit_sha,
+                "source_stage": current_task.get("source_stage"),
+                "linked_issue_ids": linked_issue_ids_for_commit,
             },
         )
 

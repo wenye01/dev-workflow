@@ -391,6 +391,12 @@ class TestVerboseAgentInvocation:
 
 
 class TestWorkflowConfigModelSelection:
+    def test_workflow_review_loop_policy_defaults(self):
+        config = WorkflowConfig()
+
+        assert config.workflow.enable_followup_review_loops is True
+        assert config.workflow.max_review_loops == 3
+
     def test_get_model_for_stage_uses_stage_override_then_default(self):
         config = WorkflowConfig.model_validate({
             "agent": {

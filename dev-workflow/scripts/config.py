@@ -29,6 +29,8 @@ class WorkflowParams(BaseModel):
     """General workflow parameters."""
 
     max_retries: int = 3
+    enable_followup_review_loops: bool = True
+    max_review_loops: int = 3
     worktrees_dir: str = "worktree"
 
 

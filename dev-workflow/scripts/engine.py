@@ -28,6 +28,7 @@ TRANSITIONS = [
     {"trigger": "start_workflow", "source": "bootstrap", "dest": "implement", "conditions": "_bootstrap_success"},
     {"trigger": "bootstrap_failed", "source": "bootstrap", "dest": "failed"},
 
+    {"trigger": "implement_complete", "source": "implement", "dest": "whitebox_test", "conditions": "_skip_review_after_implement"},
     {"trigger": "implement_complete", "source": "implement", "dest": "review", "conditions": "_all_tasks_done"},
     {"trigger": "implement_complete", "source": "implement", "dest": "implement", "conditions": "_tasks_remaining", "unless": "_all_tasks_done"},
     {"trigger": "implement_failed", "source": "implement", "dest": "failed"},
@@ -66,6 +67,7 @@ class WorkflowEngine:
         self._last_issue_category: str | None = None
         self._all_tasks_complete = False
         self._adjudicate_target: StageName | None = None
+        self._skip_review_after_implement_flag = False
         self._machine: Machine | None = None
 
     def start(self) -> None:
@@ -86,6 +88,9 @@ class WorkflowEngine:
 
     def _tasks_remaining(self) -> bool:
         return not self._all_tasks_complete
+
+    def _skip_review_after_implement(self) -> bool:
+        return self._skip_review_after_implement_flag
 
     def _verdict_pass(self) -> bool:
         return self._last_verdict == Verdict.PASS
@@ -131,6 +136,10 @@ class WorkflowEngine:
     def set_tasks_complete(self, complete: bool) -> None:
         self._all_tasks_complete = complete
         logger.info("Tasks complete flag set to: %s", complete)
+
+    def set_skip_review_after_implement(self, skip: bool) -> None:
+        self._skip_review_after_implement_flag = skip
+        logger.info("Skip review after implement flag set to: %s", skip)
 
     def set_adjudicate_target(self, target: StageName) -> None:
         self._adjudicate_target = target
