@@ -31,6 +31,13 @@
           },
           "location": {
             "type": "string"
+          },
+          "relation": {
+            "type": "string",
+            "enum": ["", "unresolved_previous", "regression", "newly_visible", "genuinely_new"]
+          },
+          "continuation_reason": {
+            "type": "string"
           }
         }
       }

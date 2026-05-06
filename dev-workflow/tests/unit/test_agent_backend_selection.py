@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -210,6 +211,55 @@ class TestImplementStageBackendSelection:
         assert "Fix review issue" in captured["prompt"]
         assert output.output_data["all_tasks_completed"] is True
         assert tasks[0]["status"] == "completed"
+
+    def test_execute_commits_task_changes_and_records_progress(self, monkeypatch: pytest.MonkeyPatch):
+        def _fake_invoke_agent(self, prompt: str, context: StageContext, config: StageConfig):
+            (context.worktree_path / "feature.txt").write_text("done", encoding="utf-8")
+            return {"summary": "Implemented feature"}
+
+        monkeypatch.setattr(ImplementStage, "_invoke_agent", _fake_invoke_agent)
+
+        stage = ImplementStage()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir(parents=True)
+            subprocess.run(["git", "init"], cwd=worktree, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=worktree, check=True)
+            subprocess.run(["git", "config", "user.name", "Test User"], cwd=worktree, check=True)
+            (worktree / "README.md").write_text("base", encoding="utf-8")
+            subprocess.run(["git", "add", "README.md"], cwd=worktree, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=worktree, check=True, capture_output=True)
+
+            state_dir = root / ".dev-workflow" / "run" / "run-1"
+            state_dir.mkdir(parents=True)
+            (state_dir / "progress.json").write_text("{}", encoding="utf-8")
+            spec_path = root / "spec.md"
+            spec_path.write_text("# Demo Spec", encoding="utf-8")
+
+            context = StageContext(
+                workflow_id="w1",
+                run_id="run-1",
+                spec_path=spec_path,
+                project_path=root,
+                worktree_path=worktree,
+                current_stage=StageName.IMPLEMENT,
+            )
+            output = stage.execute(context, StageConfig(timeout_seconds=30, agent_backend="codex"))
+
+            progress = json.loads((state_dir / "progress.json").read_text(encoding="utf-8"))
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=worktree,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+        assert output.output_data["commit_sha"]
+        assert progress["task_commits"][0]["task_id"] == "spec-implementation"
+        assert progress["task_commits"][0]["commit"] == output.output_data["commit_sha"]
+        assert status.stdout == ""
 
     def test_implement_failure_reports_backend_model_and_debug_dir(self, monkeypatch: pytest.MonkeyPatch):
         def _fake_get_backend(name: str):

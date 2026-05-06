@@ -93,11 +93,28 @@ class ImplementStage(BaseStage):
 
         task_prompt = self._build_task_prompt(current_task, context)
         logger.info("Task prompt built: %d chars", len(task_prompt))
+        before_head = self._git_output(context.worktree_path, ["rev-parse", "HEAD"]).strip()
 
         try:
-            self._invoke_agent(task_prompt, context, config)
+            agent_result = self._invoke_agent(task_prompt, context, config)
         except Exception as exc:
             logger.error("Agent invocation failed for task %s: %s", task_id, exc)
+            if not synthetic_task:
+                self._mark_task_blocked(tasks_path, task_id)
+            return StageOutput(stage_name=self.name, verdict=Verdict.FAIL, error_message=str(exc))
+
+        summary = str(agent_result.get("summary") or current_task.get("title", ""))
+        linked_issue_ids_for_commit = list(current_task.get("linked_issue_ids", []))
+        try:
+            commit_sha = self._commit_task_changes(
+                context,
+                task_id,
+                summary,
+                linked_issue_ids_for_commit,
+                before_head,
+            )
+        except RuntimeError as exc:
+            logger.error("Could not create task commit for %s: %s", task_id, exc)
             if not synthetic_task:
                 self._mark_task_blocked(tasks_path, task_id)
             return StageOutput(stage_name=self.name, verdict=Verdict.FAIL, error_message=str(exc))
@@ -109,17 +126,27 @@ class ImplementStage(BaseStage):
                 issues_path,
                 linked_issue_ids,
                 IssueStatus.IMPLEMENTED,
-                resolution_notes=f"Implemented by task {task_id}",
+                resolution_notes=f"Implemented by task {task_id} in commit {commit_sha or 'uncommitted'}",
                 task_id=task_id,
             )
 
         remaining = [] if synthetic_task else pending_or_in_progress_tasks(tasks_path)
-        self._update_progress(context, task_id, current_task.get("title", ""))
+        self._update_progress(
+            context,
+            task_id,
+            summary,
+            commit_sha,
+            linked_issue_ids_for_commit,
+        )
         return StageOutput(
             stage_name=self.name,
             verdict=Verdict.PASS,
             result_path=progress_path,
-            output_data={"more_tasks": len(remaining) > 0, "all_tasks_completed": len(remaining) == 0},
+            output_data={
+                "more_tasks": len(remaining) > 0,
+                "all_tasks_completed": len(remaining) == 0,
+                "commit_sha": commit_sha,
+            },
         )
 
     def validate_output(self, output: StageOutput, worktree_path: Path) -> ValidationResult:
@@ -147,7 +174,13 @@ class ImplementStage(BaseStage):
         return ValidationResult(is_valid=True, errors=[])
 
     def _build_task_prompt(self, task: dict, context: StageContext) -> str:
-        from context.builder import load_project_context, render_template
+        from context.builder import (
+            build_common_context,
+            build_feedback_chain,
+            build_scenario_context,
+            load_project_context,
+            render_template,
+        )
         from context.feedback import build_feedback_section
 
         task_lines = [f"**{task.get('title', 'Unknown')}**\n", task.get("description", "")]
@@ -184,8 +217,14 @@ class ImplementStage(BaseStage):
         project_ctx = load_project_context(context.worktree_path)
         if agent_ctx.progress_summary:
             progress_text = agent_ctx.progress_summary
+        common_context = build_common_context(context, spec_text)
+        scenario_context = build_scenario_context(context, self.name, task=task)
+        feedback_chain = build_feedback_chain(context)
         return render_template(self.name, {
             **project_ctx,
+            "common_context": common_context,
+            "scenario_context": scenario_context,
+            "feedback_chain": feedback_chain,
             "spec_content": spec_text,
             "task_definition": "\n".join(task_lines),
             "progress_summary": progress_text,
@@ -244,7 +283,72 @@ class ImplementStage(BaseStage):
 
         return result.parsed_output or {}
 
-    def _update_progress(self, context: StageContext, task_id: str, task_title: str) -> None:
+    def _commit_task_changes(
+        self,
+        context: StageContext,
+        task_id: str,
+        summary: str,
+        linked_issue_ids: list[str],
+        before_head: str,
+    ) -> str | None:
+        if not self._is_git_worktree(context.worktree_path):
+            logger.warning("Skipping task commit because worktree is not a git repository: %s", context.worktree_path)
+            return None
+
+        status = self._git_output(context.worktree_path, ["status", "--porcelain"])
+        if not status.strip():
+            current_head = self._git_output(context.worktree_path, ["rev-parse", "HEAD"]).strip()
+            if current_head and current_head != before_head:
+                return current_head
+            raise RuntimeError(
+                f"Implement task {task_id} did not produce file changes; refusing to mark it complete.",
+            )
+
+        self._run_git(context.worktree_path, ["add", "-A"])
+        linked = ", ".join(linked_issue_ids) if linked_issue_ids else "none"
+        commit_message = (
+            f"workflow: implement {task_id}\n\n"
+            f"Summary: {summary[:200]}\n"
+            f"Linked issues: {linked}"
+        )
+        self._run_git(context.worktree_path, ["commit", "-m", commit_message])
+        return self._git_output(context.worktree_path, ["rev-parse", "HEAD"]).strip() or None
+
+    def _is_git_worktree(self, worktree_path: Path) -> bool:
+        return self._git_output(worktree_path, ["rev-parse", "--is-inside-work-tree"]).strip() == "true"
+
+    def _git_output(self, worktree_path: Path, args: list[str]) -> str:
+        try:
+            result = subprocess.run(
+                ["git", *args],
+                cwd=str(worktree_path),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except (OSError, ValueError):
+            return ""
+        return result.stdout if result.returncode == 0 else ""
+
+    def _run_git(self, worktree_path: Path, args: list[str]) -> None:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=str(worktree_path),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError((result.stderr or result.stdout or "git command failed").strip())
+
+    def _update_progress(
+        self,
+        context: StageContext,
+        task_id: str,
+        task_title: str,
+        commit_sha: str | None,
+        linked_issue_ids: list[str],
+    ) -> None:
         progress_path = get_run_state_dir(context.project_path, context.run_id) / "progress.json"
         if progress_path.exists():
             progress = json.loads(progress_path.read_text(encoding="utf-8"))
@@ -253,22 +357,19 @@ class ImplementStage(BaseStage):
 
         progress.setdefault("completed_tasks", [])
         progress.setdefault("git_commits", [])
+        progress.setdefault("task_commits", [])
         progress["completed_tasks"].append(task_id)
         progress["current_task"] = None
         progress["last_attempt_summary"] = task_title
         progress["last_updated"] = datetime.now().isoformat()
-
-        try:
-            result = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(context.worktree_path),
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0:
-                progress["git_commits"].append(result.stdout.strip())
-        except Exception:
-            pass
+        if commit_sha:
+            progress["git_commits"].append(commit_sha)
+        progress["task_commits"].append({
+            "task_id": task_id,
+            "commit": commit_sha,
+            "linked_issue_ids": linked_issue_ids,
+            "summary": task_title,
+        })
 
         progress_path.write_text(json.dumps(progress, indent=2, ensure_ascii=False), encoding="utf-8")
 

@@ -118,6 +118,8 @@ class Issue(BaseModel):
     description: str
     location: str = ""
     suggested_fix: str = ""
+    relation: str = ""
+    continuation_reason: str = ""
     rollback_target: StageName | None = None
 
 
@@ -143,6 +145,8 @@ class TrackedIssue(BaseModel):
     description: str
     location: str = ""
     suggested_fix: str = ""
+    relation: str = ""
+    continuation_reason: str = ""
     status: IssueStatus = IssueStatus.OPEN
     task_id: str | None = None
     resolution_notes: str = ""

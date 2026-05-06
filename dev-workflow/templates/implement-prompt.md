@@ -10,6 +10,18 @@
 {custom_context}
 </project_context>
 
+<common_context>
+{common_context}
+</common_context>
+
+<scenario_context>
+{scenario_context}
+</scenario_context>
+
+<feedback_chain>
+{feedback_chain}
+</feedback_chain>
+
 <background>
 {spec_content}
 </background>
@@ -36,6 +48,18 @@
 注意不要过度投入到验证中。
 这一阶段的目标是交付一个能用的实现，不是证明所有边界都完美。
 </self_awareness>
+
+<implementation_response_policy>
+如果 scenario_context 表明这是 bugfix implement，你正在处理 feedback_chain 中被 adjudicate 接受的问题。
+
+完成后必须在 summary 中说明：
+1. 每个 linked issue 如何被修复；
+2. 修改了哪些文件；
+3. 是否做了与 linked issue 无直接关系的额外改动；
+4. 如果没有完全修复某个 issue，说明剩余风险和原因。
+
+不要主动扩大范围；如果为了修复必须扩大范围，要解释必要性。
+</implementation_response_policy>
 
 <instructions>
 1. 仔细阅读当前任务，直接实现最短路径的修复。

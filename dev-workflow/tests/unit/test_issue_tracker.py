@@ -9,10 +9,11 @@ from pathlib import Path
 from scripts.issue_tracker import (
     ensure_issue_task,
     load_tracked_issues,
+    mark_issues_status,
     mark_task_completed,
     sync_feedback_issues,
 )
-from scripts.models import Issue, ReviewFeedback, Severity, StageName, Verdict
+from scripts.models import Issue, IssueStatus, ReviewFeedback, Severity, StageName, Verdict
 
 
 class TestIssueTracker:
@@ -61,3 +62,31 @@ class TestIssueTracker:
             assert mark_task_completed(tasks_path, task_id) == [tracked.id]
             tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
             assert tasks[0]["status"] == "completed"
+
+    def test_sync_feedback_preserves_rejected_issue_decision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            issues_path = Path(tmp) / "issues.json"
+            feedback = ReviewFeedback(
+                verdict=Verdict.FAIL,
+                issues=[
+                    Issue(
+                        severity=Severity.MAJOR,
+                        category="correctness",
+                        description="Already adjudicated",
+                        location="main.py:1",
+                    ),
+                ],
+            )
+            issue = sync_feedback_issues(issues_path, StageName.REVIEW, feedback)[0]
+            mark_issues_status(
+                issues_path,
+                [issue.id],
+                IssueStatus.REJECTED,
+                resolution_notes="Non-blocking duplicate",
+            )
+
+            repeated = sync_feedback_issues(issues_path, StageName.REVIEW, feedback)[0]
+
+            assert repeated.id == issue.id
+            assert repeated.status == IssueStatus.REJECTED
+            assert repeated.resolution_notes == "Non-blocking duplicate"

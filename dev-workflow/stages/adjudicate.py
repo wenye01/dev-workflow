@@ -158,18 +158,35 @@ class AdjudicateStage(BaseStage):
         source_stage: StageName,
         tracked_issues: list[TrackedIssue],
     ) -> str:
-        from context.builder import load_project_context, render_template
+        from context.builder import (
+            build_common_context,
+            build_feedback_chain,
+            build_scenario_context,
+            load_project_context,
+            render_template,
+        )
 
         project_ctx = load_project_context(context.worktree_path)
         agent_ctx = context.agent_context or self.build_agent_context(context)
         spec_text = agent_ctx.spec_content
+        common_context = build_common_context(context, spec_text)
+        scenario_context = build_scenario_context(
+            context,
+            self.name,
+            source_stage=source_stage,
+        )
+        feedback_chain = build_feedback_chain(context)
         issues_text = "\n".join([
             (
                 f"- issue_id={issue.id}\n"
                 f"  severity={issue.severity.value}\n"
                 f"  category={issue.category}\n"
+                f"  status={issue.status.value}\n"
+                f"  relation={issue.relation}\n"
                 f"  location={issue.location}\n"
                 f"  description={issue.description}\n"
+                f"  continuation_reason={issue.continuation_reason}\n"
+                f"  previous_resolution={issue.resolution_notes}\n"
                 f"  suggested_fix={issue.suggested_fix}"
             )
             for issue in tracked_issues
@@ -177,6 +194,9 @@ class AdjudicateStage(BaseStage):
 
         return render_template(self.name, {
             **project_ctx,
+            "common_context": common_context,
+            "scenario_context": scenario_context,
+            "feedback_chain": feedback_chain,
             "spec_content": spec_text,
             "source_stage": source_stage.value,
             "issues_text": issues_text,

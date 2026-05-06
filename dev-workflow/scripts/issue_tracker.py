@@ -52,7 +52,7 @@ def sync_feedback_issues(
     source_stage: StageName,
     feedback: ReviewFeedback,
 ) -> list[TrackedIssue]:
-    """Upsert issues from a stage result into issues.json and reopen prior matches."""
+    """Upsert issues from a stage result into issues.json while preserving closed decisions."""
     tracked = load_tracked_issues(issues_path)
     by_fingerprint = {issue.fingerprint: issue for issue in tracked}
     updated: list[TrackedIssue] = []
@@ -70,6 +70,8 @@ def sync_feedback_issues(
                 description=issue.description,
                 location=issue.location,
                 suggested_fix=issue.suggested_fix,
+                relation=issue.relation,
+                continuation_reason=issue.continuation_reason,
                 status=IssueStatus.OPEN,
                 last_seen_at=now,
             )
@@ -81,11 +83,11 @@ def sync_feedback_issues(
             existing.description = issue.description
             existing.location = issue.location
             existing.suggested_fix = issue.suggested_fix
+            existing.relation = issue.relation
+            existing.continuation_reason = issue.continuation_reason
             existing.last_seen_at = now
-            existing.closed_at = None
-            if existing.status in (IssueStatus.CLOSED, IssueStatus.REJECTED):
-                existing.status = IssueStatus.OPEN
-                existing.resolution_notes = ""
+            if existing.status not in (IssueStatus.CLOSED, IssueStatus.REJECTED):
+                existing.closed_at = None
         updated.append(existing)
 
     save_tracked_issues(issues_path, tracked)
@@ -215,6 +217,8 @@ def build_feedback_from_tracked_issues(tracked_issues: list[TrackedIssue]) -> Re
                 description=tracked.description,
                 location=tracked.location,
                 suggested_fix=tracked.suggested_fix,
+                relation=tracked.relation,
+                continuation_reason=tracked.continuation_reason,
             )
             for tracked in tracked_issues
         ],

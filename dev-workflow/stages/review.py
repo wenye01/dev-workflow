@@ -84,6 +84,14 @@ class ReviewStage(BaseStage):
         review_path = get_run_state_dir(context.project_path, context.run_id) / "review-result.json"
         review_path.parent.mkdir(parents=True, exist_ok=True)
         review_path.write_text(feedback.model_dump_json(indent=2), encoding="utf-8")
+        try:
+            from context.builder import mark_reviewed_commit
+
+            reviewed_commit = mark_reviewed_commit(context)
+            if reviewed_commit:
+                logger.info("Review anchored at commit: %s", reviewed_commit)
+        except Exception as exc:
+            logger.warning("Could not record reviewed commit: %s", exc)
 
         return StageOutput(
             stage_name=self.name,
@@ -107,15 +115,28 @@ class ReviewStage(BaseStage):
 
     def _build_review_prompt(self, context: StageContext) -> str:
         """Build review prompt using template."""
-        from context.builder import load_project_context, render_template
+        from context.builder import (
+            build_common_context,
+            build_feedback_chain,
+            build_review_diff,
+            build_scenario_context,
+            load_project_context,
+            render_template,
+        )
 
         agent_ctx = context.agent_context or self.build_agent_context(context)
         spec_text = agent_ctx.spec_content
-        git_changes = agent_ctx.git_history or self._get_git_changes(context.worktree_path)
+        git_changes = build_review_diff(context) or agent_ctx.git_history or self._get_git_changes(context.worktree_path)
         project_ctx = load_project_context(context.worktree_path)
+        common_context = build_common_context(context, spec_text)
+        scenario_context = build_scenario_context(context, self.name)
+        feedback_chain = build_feedback_chain(context)
 
         return render_template(self.name, {
             **project_ctx,
+            "common_context": common_context,
+            "scenario_context": scenario_context,
+            "feedback_chain": feedback_chain,
             "spec_content": spec_text,
             "git_changes": git_changes,
             "feedback": "",
@@ -211,6 +232,8 @@ class ReviewStage(BaseStage):
                 category=i["category"],
                 description=i["description"],
                 location=i.get("location", ""),
+                relation=i.get("relation", ""),
+                continuation_reason=i.get("continuation_reason", ""),
             )
             for i in parsed.get("issues", [])
         ]

@@ -53,6 +53,26 @@ class TestValidateAgentOutput:
         assert parsed["verdict"] == "fail"
         assert len(parsed["issues"]) == 2
 
+    def test_valid_review_output_with_continuity_fields(self):
+        raw = {
+            "verdict": "fail",
+            "summary": "Found issues",
+            "issues": [
+                {
+                    "severity": "major",
+                    "category": "correctness",
+                    "description": "Accepted issue remains unfixed",
+                    "location": "main.py:42",
+                    "relation": "unresolved_previous",
+                    "continuation_reason": "Blocks the acceptance criteria",
+                },
+            ],
+        }
+        parsed, errors = validate_agent_output(raw, "review-output")
+        assert parsed is not None
+        assert errors == []
+        assert parsed["issues"][0]["relation"] == "unresolved_previous"
+
     def test_none_input(self):
         parsed, errors = validate_agent_output(None, "review-output")
         assert parsed is None
