@@ -1,16 +1,43 @@
 {
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["summary"],
-  "additionalProperties": false,
+  "required": ["finish_status", "summary", "publish_status", "stage_counts", "issue_counts", "task_counts"],
+  "additionalProperties": true,
   "properties": {
+    "finish_status": {
+      "type": "string",
+      "enum": ["completed", "completed_with_warnings"]
+    },
     "summary": {
       "type": "string"
     },
-    "files_changed": {
-      "type": "integer"
+    "report_path": {
+      "type": "string"
     },
-    "tests_added": {
-      "type": "integer"
+    "pr_url": {
+      "type": "string"
+    },
+    "publish_status": {
+      "type": "string",
+      "enum": ["created", "not_created"]
+    },
+    "publish_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stage_counts": {
+      "type": "object"
+    },
+    "issue_counts": {
+      "type": "object"
+    },
+    "task_counts": {
+      "type": "object"
+    },
+    "git": {
+      "type": "object"
     }
   }
 }

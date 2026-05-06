@@ -8,7 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from scripts.models import StageContext, StageOutput, StageName, Verdict
+from scripts.models import (
+    StageContext,
+    StageExecution,
+    StageName,
+    StageOutput,
+    StageStatus,
+    Verdict,
+)
 from scripts.output_schema import clear_cache, list_schemas, validate_agent_output
 from stages.adjudicate import AdjudicateStage
 from stages.blackbox_test import BlackboxTestStage
@@ -127,9 +134,10 @@ class TestSchemaDiscovery:
         assert "adjudicate-output" in schemas
 
     def test_clear_cache(self):
-        validate_agent_output({"verdict": "pass"}, "review-output")
+        payload = {"verdict": "pass", "summary": "ok", "issues": []}
+        validate_agent_output(payload, "review-output")
         clear_cache()
-        parsed, errors = validate_agent_output({"verdict": "pass"}, "review-output")
+        parsed, errors = validate_agent_output(payload, "review-output")
         assert parsed is not None
         assert errors == []
 
@@ -499,10 +507,20 @@ class TestFinishValidateOutput:
             report_path = workflow_dir / "report.md"
             report_path.write_text("# Report", encoding="utf-8")
             (workflow_dir / "state.json").write_text(
-                json.dumps({"status": "completed"}),
+                json.dumps({
+                    "status": "completed",
+                    "finish_status": "completed",
+                    "summary": "done",
+                    "publish": {"status": "created"},
+                }),
                 encoding="utf-8",
             )
-            output = StageOutput(stage_name=StageName.FINISH, verdict=Verdict.PASS, result_path=report_path)
+            output = StageOutput(
+                stage_name=StageName.FINISH,
+                verdict=Verdict.PASS,
+                result_path=report_path,
+                output_data={"finish_status": "completed"},
+            )
             result = self.stage.validate_output(output, Path(tmp))
             assert result.is_valid is True
 
@@ -513,13 +531,114 @@ class TestFinishValidateOutput:
             report_path = workflow_dir / "report.md"
             report_path.write_text("# Report", encoding="utf-8")
             (workflow_dir / "state.json").write_text(
-                json.dumps({"status": "running"}),
+                json.dumps({
+                    "status": "running",
+                    "finish_status": "completed",
+                    "summary": "done",
+                    "publish": {"status": "created"},
+                }),
                 encoding="utf-8",
             )
-            output = StageOutput(stage_name=StageName.FINISH, verdict=Verdict.PASS, result_path=report_path)
+            output = StageOutput(
+                stage_name=StageName.FINISH,
+                verdict=Verdict.PASS,
+                result_path=report_path,
+            )
             result = self.stage.validate_output(output, Path(tmp))
             assert result.is_valid is False
             assert any("completed" in error for error in result.errors)
+
+    def test_execute_writes_summary_and_publish_warning(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worktree = root / "worktree"
+            worktree.mkdir()
+            state_dir = root / ".dev-workflow" / "run" / "run-1"
+            state_dir.mkdir(parents=True)
+            (state_dir / "state.json").write_text(
+                json.dumps({"status": "running"}),
+                encoding="utf-8",
+            )
+            (state_dir / "progress.json").write_text(
+                json.dumps({
+                    "completed_tasks": ["spec-implementation"],
+                    "task_commits": [
+                        {
+                            "task_id": "spec-implementation",
+                            "commit": "abc123",
+                            "summary": "Implemented feature",
+                        }
+                    ],
+                }),
+                encoding="utf-8",
+            )
+            (state_dir / "issues.json").write_text(
+                json.dumps([
+                    {"status": "closed", "severity": "major"},
+                    {"status": "rejected", "severity": "minor"},
+                ]),
+                encoding="utf-8",
+            )
+            (state_dir / "review-result.json").write_text(
+                json.dumps({"verdict": "pass", "summary": "Review passed", "issues": []}),
+                encoding="utf-8",
+            )
+
+            monkeypatch.setattr(
+                self.stage,
+                "_create_pull_request",
+                lambda context: {
+                    "status": "not_created",
+                    "push_status": "failed",
+                    "pr_status": "skipped",
+                    "pr_url": "",
+                    "errors": ["git push failed: no remote"],
+                },
+            )
+            monkeypatch.setattr(
+                self.stage,
+                "_run_command",
+                lambda cmd, cwd: {
+                    "returncode": 0,
+                    "stdout": "main" if "rev-parse" in cmd else "",
+                    "stderr": "",
+                    "message": "",
+                },
+            )
+
+            output = self.stage.execute(
+                StageContext(
+                    workflow_id="w1",
+                    run_id="run-1",
+                    project_path=root,
+                    spec_path=root / "spec.md",
+                    worktree_path=worktree,
+                    current_stage=StageName.FINISH,
+                    stage_history=[
+                        StageExecution(
+                            stage_name=StageName.IMPLEMENT,
+                            status=StageStatus.COMPLETED,
+                        ),
+                        StageExecution(
+                            stage_name=StageName.REVIEW,
+                            status=StageStatus.COMPLETED,
+                        ),
+                    ],
+                ),
+                config=None,
+            )
+
+            state = json.loads((state_dir / "state.json").read_text(encoding="utf-8"))
+            report = (state_dir / "report.md").read_text(encoding="utf-8")
+
+        assert output.output_data["finish_status"] == "completed_with_warnings"
+        assert output.output_data["publish_status"] == "not_created"
+        assert state["finish_status"] == "completed_with_warnings"
+        assert "Publish Status" in report
+        assert "git push failed: no remote" in report
 
 
 class TestContractCompliance:

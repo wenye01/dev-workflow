@@ -321,7 +321,11 @@ class TestVerboseAgentInvocation:
         assert "claude-sonnet-4-20250514" in captured["cmd"]
         assert result.parsed_output == {"ok": True}
 
-    def test_claude_backend_enables_verbose_flag(self, monkeypatch: pytest.MonkeyPatch):
+    def test_claude_backend_enables_verbose_flag_in_debug_mode(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ):
         captured: dict[str, object] = {}
 
         def _fake_popen(cmd, **kwargs):
@@ -338,9 +342,36 @@ class TestVerboseAgentInvocation:
             prompt="test prompt",
             working_dir=Path("."),
             timeout=1,
+            debug_log_dir=tmp_path,
         )
 
         assert "--verbose" in captured["cmd"]
+        assert "--debug-file" in captured["cmd"]
+        assert result.parsed_output == {"ok": True}
+
+    def test_claude_backend_does_not_enable_verbose_without_debug_log(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ):
+        captured: dict[str, object] = {}
+
+        def _fake_popen(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return _FakeProcess(
+                stdout=json.dumps({"result": json.dumps({"ok": True})}),
+            )
+
+        monkeypatch.setattr("agents.claude.subprocess.Popen", _fake_popen)
+
+        backend = ClaudeBackend()
+        result = backend.invoke(
+            prompt="test prompt",
+            working_dir=Path("."),
+            timeout=1,
+        )
+
+        assert "--verbose" not in captured["cmd"]
+        assert "--debug-file" not in captured["cmd"]
         assert result.parsed_output == {"ok": True}
 
     def test_codex_backend_sets_debug_logging(self, monkeypatch: pytest.MonkeyPatch):
