@@ -6,7 +6,9 @@ import {
 } from '../../config/config-loader.js';
 import { ProviderRegistry } from '../../config/provider-registry.js';
 import { RoleCatalog, RoleCatalogError } from '../../config/role-catalog.js';
-import { addJsonOutputNote, failNotImplemented } from './shared.js';
+import { SchemaValidationError } from '../../schemas/validator.js';
+import { RouterToolbox } from '../../routers/router-tools.js';
+import { addJsonOutputNote } from './shared.js';
 
 export function registerToolCommand(program: Command): void {
   const tool = program
@@ -20,7 +22,22 @@ export function registerToolCommand(program: Command): void {
     .description('Read run state and optionally one unit state.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .option('--unit <unit_id>', 'Unit id')
-    .action(() => failNotImplemented('tool state'));
+    .action(async (options: { readonly runDir: string; readonly unit?: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const runState = await toolbox.readRunState();
+        const result: Record<string, unknown> = { run_state: runState };
+
+        if (options.unit) {
+          result.unit_state = await toolbox.readUnitState(options.unit);
+        }
+
+        console.log(JSON.stringify(result, null, 2));
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   const artifact = tool
     .command('artifact')
@@ -31,13 +48,40 @@ export function registerToolCommand(program: Command): void {
     .description('Read one artifact by ref.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .requiredOption('--ref <artifact_ref>', 'Artifact ref under .agentflow')
-    .action(() => failNotImplemented('tool artifact get'));
+    .action(async (options: { readonly runDir: string; readonly ref: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const artifact = await toolbox.readArtifact(options.ref);
+        console.log(
+          JSON.stringify(
+            {
+              ref: options.ref,
+              artifact,
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   artifact
     .command('index')
     .description('Read the artifact index.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
-    .action(() => failNotImplemented('tool artifact index'));
+    .action(async (options: { readonly runDir: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const artifactIndex = await toolbox.readArtifactIndex();
+        console.log(JSON.stringify({ artifact_index: artifactIndex }, null, 2));
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   const context = tool
     .command('context')
@@ -51,7 +95,28 @@ export function registerToolCommand(program: Command): void {
       '--name <name>',
       'Context name: project-index-ref, selected-project-context, or worktree-status',
     )
-    .action(() => failNotImplemented('tool context get'));
+    .action(async (options: { readonly runDir: string; readonly name: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const context = await toolbox.readContext(
+          options.name as 'project-index-ref' | 'selected-project-context' | 'worktree-status',
+        );
+        console.log(
+          JSON.stringify(
+            {
+              name: context.name,
+              ref: context.ref,
+              artifact: context.value,
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   const roleCatalog = tool
     .command('role-catalog')
@@ -133,13 +198,31 @@ export function registerToolCommand(program: Command): void {
     .command('status')
     .description('Read worktree status.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
-    .action(() => failNotImplemented('tool worktree status'));
+    .action(async (options: { readonly runDir: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const worktreeStatus = await toolbox.readWorktreeStatus();
+        console.log(JSON.stringify({ worktree_status: worktreeStatus }, null, 2));
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   worktree
     .command('diff-summary')
     .description('Read a summary of worktree changes.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
-    .action(() => failNotImplemented('tool worktree diff-summary'));
+    .action(async (options: { readonly runDir: string }) => {
+      try {
+        const toolbox = new RouterToolbox(options.runDir);
+        const diffSummary = await toolbox.readWorktreeDiffSummary();
+        console.log(JSON.stringify(diffSummary, null, 2));
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 }
 
 function formatToolError(error: unknown): Record<string, unknown> {
@@ -148,6 +231,18 @@ function formatToolError(error: unknown): Record<string, unknown> {
       error: {
         code: error.code,
         message: error.message,
+      },
+    };
+  }
+
+  if (error instanceof SchemaValidationError) {
+    return {
+      error: {
+        code: error.code,
+        classification: error.classification,
+        schema_id: error.schemaId,
+        message: error.message,
+        errors: error.errors,
       },
     };
   }
