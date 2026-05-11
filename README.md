@@ -18,6 +18,7 @@ agentflow doctor --config <file>
 ## Development
 
 ```bash
+nvm use
 npm install
 npm test
 npm run build

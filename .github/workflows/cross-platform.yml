@@ -9,12 +9,9 @@ on:
 permissions:
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   test:
-    name: Node ${{ matrix.node-version }} on ${{ matrix.os }}
+    name: Node from .nvmrc on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -24,17 +21,15 @@ jobs:
           - ubuntu-latest
           - macos-latest
           - windows-latest
-        node-version:
-          - 20
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
