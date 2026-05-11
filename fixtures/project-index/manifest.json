@@ -1,0 +1,86 @@
+{
+  "schema_version": "agentflow.project_index.manifest.v1",
+  "index_id": "project-index-fixture",
+  "repo": {
+    "root": "/fixture/repo",
+    "base_ref": "main"
+  },
+  "head": {
+    "sha": "1234567890abcdef1234567890abcdef12345678",
+    "ref": "main"
+  },
+  "config_hash": null,
+  "generated_at": "2026-05-11T00:00:00.000Z",
+  "builder": {
+    "name": "agentflow",
+    "version": "0.0.0"
+  },
+  "schema_versions": {
+    "manifest": "agentflow.project_index.manifest.v1",
+    "overview": "agentflow.project_index.overview.v1",
+    "repo_tree": "agentflow.project_index.repo_tree.v1",
+    "commands": "agentflow.project_index.commands.v1",
+    "module": "agentflow.project_index.module.v1",
+    "document_index": "agentflow.project_index.document_index.v1",
+    "document_summary": "agentflow.project_index.document_summary.v1",
+    "build_report": "agentflow.project_index.build_report.v1"
+  },
+  "artifacts": [
+    {
+      "name": "overview",
+      "kind": "overview",
+      "ref": ".agentflow/project-index/overview.json",
+      "schema_id": "agentflow.schema.project_index.overview.v1",
+      "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "size_bytes": 512
+    },
+    {
+      "name": "repo-tree",
+      "kind": "repo_tree",
+      "ref": ".agentflow/project-index/repo-tree.json",
+      "schema_id": "agentflow.schema.project_index.repo_tree.v1",
+      "content_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "size_bytes": 512
+    },
+    {
+      "name": "commands",
+      "kind": "commands",
+      "ref": ".agentflow/project-index/commands.json",
+      "schema_id": "agentflow.schema.project_index.commands.v1",
+      "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "size_bytes": 512
+    },
+    {
+      "name": "module-auth",
+      "kind": "module",
+      "ref": ".agentflow/project-index/modules/auth.json",
+      "schema_id": "agentflow.schema.project_index.module.v1",
+      "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "size_bytes": 512
+    },
+    {
+      "name": "documents",
+      "kind": "document_index",
+      "ref": ".agentflow/project-index/documents/index.json",
+      "schema_id": "agentflow.schema.project_index.document_index.v1",
+      "content_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "size_bytes": 512
+    },
+    {
+      "name": "readme-summary",
+      "kind": "document_summary",
+      "ref": ".agentflow/project-index/documents/summaries/readme.json",
+      "schema_id": "agentflow.schema.project_index.document_summary.v1",
+      "content_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "size_bytes": 512
+    },
+    {
+      "name": "build-report",
+      "kind": "build_report",
+      "ref": ".agentflow/project-index/build-report.json",
+      "schema_id": "agentflow.schema.project_index.build_report.v1",
+      "content_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "size_bytes": 512
+    }
+  ]
+}

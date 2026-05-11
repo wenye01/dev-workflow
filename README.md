@@ -10,6 +10,8 @@ TypeScript library API.
 ```bash
 agentflow --help
 agentflow run --repo <path> --task <file> --config <file>
+agentflow project-index build --repo <path> [--out <path>] [--config <file>] [--force]
+agentflow project-index show --index-dir <path> --name <manifest|overview|documents|commands|modules|tree>
 agentflow resume --run-id <run_id> --repo <path>
 agentflow validate <artifact>
 agentflow doctor --config <file>

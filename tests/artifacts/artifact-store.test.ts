@@ -4,8 +4,12 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { ArtifactStore } from '../../src/artifacts/artifact-store.js';
 import {
+  ArtifactStore,
+  type ArtifactMetadataInput,
+} from '../../src/artifacts/artifact-store.js';
+import {
+  artifactPath,
   artifactIndexPath,
   parseArtifactRef,
   plannerPath,
@@ -13,9 +17,87 @@ import {
   unitPath,
 } from '../../src/artifacts/paths.js';
 import { asUnitId } from '../../src/core/types.js';
+import type {
+  ArtifactType,
+  LlmPayloadType,
+} from '../../src/schemas/registry.js';
+import { SchemaRegistry } from '../../src/schemas/registry.js';
 import { SchemaValidationError } from '../../src/schemas/validator.js';
 
 describe('ArtifactStore', () => {
+  it('enriches every valid LLM payload fixture into a canonical artifact', async () => {
+    const runRoot = await makeRunRoot();
+    const store = new ArtifactStore(runRoot);
+    const unitId = asUnitId('unit-auth-001');
+
+    const cases: ReadonlyArray<{
+      readonly payloadType: LlmPayloadType;
+      readonly artifactType: ArtifactType;
+      readonly file: string;
+      readonly ref: ReturnType<typeof artifactPath>;
+      readonly metadata: Omit<
+        ArtifactMetadataInput,
+        'runId' | 'producer' | 'createdAt'
+      >;
+    }> = [
+      {
+        payloadType: 'router_dispatch',
+        artifactType: 'routing_decision',
+        file: 'valid-router-dispatch.json',
+        ref: artifactPath('routing', 'generator-route.json'),
+        metadata: {},
+      },
+      {
+        payloadType: 'role_output',
+        artifactType: 'role_output',
+        file: 'valid-role-output.json',
+        ref: unitPath(unitId, 'roles', 'generator-output.json'),
+        metadata: { unitId, attempt: 1 },
+      },
+      {
+        payloadType: 'planner_package',
+        artifactType: 'planner_package',
+        file: 'valid-planner-package.json',
+        ref: plannerPath('package.json'),
+        metadata: {},
+      },
+      {
+        payloadType: 'change_package',
+        artifactType: 'change_package',
+        file: 'valid-change-package.json',
+        ref: unitPath(unitId, 'change-package.json'),
+        metadata: { unitId, attempt: 1 },
+      },
+      {
+        payloadType: 'evaluator_report',
+        artifactType: 'evaluator_report',
+        file: 'valid-evaluator-report.json',
+        ref: unitPath(unitId, 'evaluator-report.json'),
+        metadata: { unitId, attempt: 1 },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = await store.writeFromPayload({
+        payloadType: testCase.payloadType,
+        artifactType: testCase.artifactType,
+        ref: testCase.ref,
+        payload: await readPayload(testCase.file),
+        metadata: {
+          runId: 'run-fixture',
+          producer: {
+            kind: 'router',
+            module: 'generator',
+          },
+          createdAt: '2026-05-11T00:00:00.000Z',
+          ...testCase.metadata,
+        },
+      });
+
+      expect(result.artifact.artifact_type).toBe(testCase.artifactType);
+    }
+  });
+
   it('enriches a valid LLM payload into a canonical artifact and index entry', async () => {
     const runRoot = await makeRunRoot();
     const store = new ArtifactStore(runRoot);
@@ -124,6 +206,46 @@ describe('ArtifactStore', () => {
     expect(stop.index.artifacts.map((entry) => entry.ref)).toEqual([
       '.agentflow/stop-report.json',
     ]);
+  });
+
+  it('can write a stop report for Project Index schema failures', async () => {
+    const runRoot = await makeRunRoot();
+    const store = new ArtifactStore(runRoot);
+    const registry = SchemaRegistry.load();
+    let schemaFailure: unknown;
+
+    try {
+      registry.assertProjectIndex('commands', {
+        schema_version: 'agentflow.project_index.commands.v1',
+        repo: '/fixture/repo',
+        generated_at: '2026-05-11T00:00:00.000Z',
+        commands: [],
+      });
+    } catch (error) {
+      schemaFailure = error;
+    }
+
+    expect(schemaFailure).toBeInstanceOf(SchemaValidationError);
+
+    const stop = await store.writeStopReportForSchemaFailure(schemaFailure, {
+      failedArtifactRef: parseArtifactRef(
+        '.agentflow/project-index/commands.json',
+      ),
+      metadata: {
+        runId: 'run-fixture',
+        producer: {
+          kind: 'orchestrator',
+          module: 'decision',
+        },
+        createdAt: '2026-05-11T00:00:01.000Z',
+      },
+    });
+
+    expect(stop.artifact.payload).toMatchObject({
+      status: 'stopped',
+      reason_code: 'schema_validation_failed',
+      classification: 'project_index_schema_invalid',
+    });
   });
 });
 

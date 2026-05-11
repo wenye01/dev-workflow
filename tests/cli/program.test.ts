@@ -8,6 +8,7 @@ describe('agentflow CLI', () => {
 
     expect(help).toContain('Usage: agentflow [options] [command]');
     expect(help).toContain('run');
+    expect(help).toContain('project-index');
     expect(help).toContain('resume');
     expect(help).toContain('validate');
     expect(help).toContain('doctor');

@@ -8,8 +8,6 @@
     "success_definition",
     "non_goals",
     "technical_constraints",
-    "known_facts",
-    "inferred_context",
     "units",
     "batches",
     "contracts",
@@ -29,39 +27,6 @@
     "technical_constraints": {
       "type": "array",
       "items": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" }
-    },
-    "known_facts": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["fact", "source"],
-        "additionalProperties": false,
-        "properties": {
-          "fact": {
-            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
-          },
-          "source": {
-            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
-          }
-        }
-      }
-    },
-    "inferred_context": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["inference", "basis", "confidence"],
-        "additionalProperties": false,
-        "properties": {
-          "inference": {
-            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
-          },
-          "basis": {
-            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
-          },
-          "confidence": { "enum": ["high", "medium", "low"] }
-        }
-      }
     },
     "units": {
       "type": "array",

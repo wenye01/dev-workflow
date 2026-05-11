@@ -1,0 +1,118 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.project_index.overview.v1",
+  "title": "Project Index overview",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "repo",
+    "generated_at",
+    "summary",
+    "languages",
+    "key_directories",
+    "entrypoints",
+    "modules",
+    "test_strategy",
+    "build_strategy"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "agentflow.project_index.overview.v1" },
+    "repo": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "generated_at": { "type": "string" },
+    "summary": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "languages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "confidence": { "enum": ["high", "medium", "low"] }
+        }
+      }
+    },
+    "key_directories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "purpose"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "agentflow.schema.common.v1#/$defs/relative_path" },
+          "purpose": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "entrypoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "kind", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "agentflow.schema.common.v1#/$defs/relative_path" },
+          "kind": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "description": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["module_id", "name", "summary", "module_ref"],
+        "additionalProperties": false,
+        "properties": {
+          "module_id": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "name": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "summary": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "module_ref": {
+            "$ref": "agentflow.schema.common.v1#/$defs/artifact_ref"
+          }
+        }
+      }
+    },
+    "test_strategy": {
+      "type": "object",
+      "required": ["summary", "command_refs"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "command_refs": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+        }
+      }
+    },
+    "build_strategy": {
+      "type": "object",
+      "required": ["summary", "command_refs"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "command_refs": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+        }
+      }
+    }
+  }
+}

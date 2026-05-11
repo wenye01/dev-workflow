@@ -85,6 +85,7 @@
             }
           },
           "write_permission": {
+            "description": "Prompt-level write intent for role instructions only. It is not a runtime access-control mechanism.",
             "enum": ["readonly", "artifact_write", "worktree_write"]
           },
           "provider_hint": { "type": "string" }

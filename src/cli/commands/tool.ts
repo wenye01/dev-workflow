@@ -43,7 +43,7 @@ export function registerToolCommand(program: Command): void {
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .requiredOption(
       '--name <name>',
-      'Context name: repo-context, commands, or worktree-status',
+      'Context name: project-index-ref, selected-project-context, or worktree-status',
     )
     .action(() => failNotImplemented('tool context get'));
 

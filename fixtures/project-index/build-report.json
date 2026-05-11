@@ -1,0 +1,47 @@
+{
+  "schema_version": "agentflow.project_index.build_report.v1",
+  "repo": "/fixture/repo",
+  "generated_at": "2026-05-11T00:00:00.000Z",
+  "status": "degraded",
+  "quality": {
+    "indexed_files": 2,
+    "indexed_documents": 1,
+    "indexed_modules": 1
+  },
+  "skipped_files": [
+    {
+      "path": "node_modules",
+      "reason": "dependency",
+      "detail": "Dependency directory."
+    }
+  ],
+  "missing_commands": [
+    {
+      "kind": "lint",
+      "reason": "No lint script in fixture package."
+    }
+  ],
+  "freshness": {
+    "head": {
+      "sha": "1234567890abcdef1234567890abcdef12345678",
+      "ref": "main"
+    },
+    "config_hash": null,
+    "schema_version": "agentflow.project_index.manifest.v1",
+    "builder_version": "0.0.0",
+    "indexed_files": [
+      {
+        "path": "src/auth/service.ts",
+        "mtime": "2026-05-11T00:00:00.000Z",
+        "size_bytes": 2048,
+        "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "degradations": [
+    {
+      "reason": "Missing lint command.",
+      "impact": "Lint cannot be recommended automatically."
+    }
+  ]
+}

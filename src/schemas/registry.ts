@@ -18,6 +18,19 @@ export const LLM_PAYLOAD_TYPES = [
 
 export type LlmPayloadType = (typeof LLM_PAYLOAD_TYPES)[number];
 
+export const PROJECT_INDEX_TYPES = [
+  'manifest',
+  'overview',
+  'repo_tree',
+  'commands',
+  'module',
+  'document_index',
+  'document_summary',
+  'build_report',
+] as const;
+
+export type ProjectIndexType = (typeof PROJECT_INDEX_TYPES)[number];
+
 export const ARTIFACT_TYPES = [
   'run_state',
   'unit_state',
@@ -46,6 +59,19 @@ export const LLM_SCHEMA_IDS: Readonly<Record<LlmPayloadType, string>> = {
   planner_package: 'agentflow.schema.llm.planner_package.v1',
   change_package: 'agentflow.schema.llm.change_package.v1',
   evaluator_report: 'agentflow.schema.llm.evaluator_report.v1',
+};
+
+export const PROJECT_INDEX_SCHEMA_IDS: Readonly<
+  Record<ProjectIndexType, string>
+> = {
+  manifest: 'agentflow.schema.project_index.manifest.v1',
+  overview: 'agentflow.schema.project_index.overview.v1',
+  repo_tree: 'agentflow.schema.project_index.repo_tree.v1',
+  commands: 'agentflow.schema.project_index.commands.v1',
+  module: 'agentflow.schema.project_index.module.v1',
+  document_index: 'agentflow.schema.project_index.document_index.v1',
+  document_summary: 'agentflow.schema.project_index.document_summary.v1',
+  build_report: 'agentflow.schema.project_index.build_report.v1',
 };
 
 export const ARTIFACT_SCHEMA_IDS: Readonly<Record<ArtifactType, string>> = {
@@ -93,6 +119,14 @@ export class SchemaRegistry {
     );
   }
 
+  assertProjectIndex(projectIndexType: ProjectIndexType, value: unknown): void {
+    this.validator.assertValid(
+      PROJECT_INDEX_SCHEMA_IDS[projectIndexType],
+      value,
+      'project_index_schema_invalid',
+    );
+  }
+
   assertCanonicalArtifact(artifactType: ArtifactType, value: unknown): void {
     this.validator.assertValid(
       ARTIFACT_SCHEMA_IDS[artifactType],
@@ -102,7 +136,11 @@ export class SchemaRegistry {
   }
 
   assertBySchemaId(schemaId: string, value: unknown): void {
-    this.validator.assertValid(schemaId, value, 'canonical_schema_invalid');
+    this.validator.assertValid(
+      schemaId,
+      value,
+      classificationForSchemaId(schemaId),
+    );
   }
 
   schemaIdForCanonical(value: unknown): string {
@@ -113,6 +151,23 @@ export class SchemaRegistry {
   schemaIds(): readonly string[] {
     return this.validator.schemaIds();
   }
+}
+
+function classificationForSchemaId(
+  schemaId: string,
+):
+  | 'payload_schema_invalid'
+  | 'project_index_schema_invalid'
+  | 'canonical_schema_invalid' {
+  if (schemaId.startsWith('agentflow.schema.llm.')) {
+    return 'payload_schema_invalid';
+  }
+
+  if (schemaId.startsWith('agentflow.schema.project_index.')) {
+    return 'project_index_schema_invalid';
+  }
+
+  return 'canonical_schema_invalid';
 }
 
 export function canonicalSchemaVersion(artifactType: ArtifactType): string {

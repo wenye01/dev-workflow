@@ -27,7 +27,9 @@
               "type": "object",
               "additionalProperties": true
             },
-            "context": { "type": "object", "additionalProperties": true },
+            "context": {
+              "$ref": "agentflow.schema.project_index.common.v1#/$defs/selected_project_context"
+            },
             "constraints": { "type": "object", "additionalProperties": true },
             "previous_failures": {
               "type": "array",
