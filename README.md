@@ -23,3 +23,9 @@ npm test
 npm run build
 npm pack
 ```
+
+## Cross-platform checks
+
+GitHub Actions includes a `Cross Platform` workflow for Ubuntu, macOS, and
+Windows. It only runs when manually triggered with `workflow_dispatch` or
+externally triggered with `repository_dispatch` type `cross-platform-test`.
