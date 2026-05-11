@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.llm.change_package.v1",
+  "title": "LLM change package payload",
+  "type": "object",
+  "required": [
+    "mode",
+    "summary",
+    "changed_files",
+    "verification",
+    "criteria_mapping",
+    "scope_notes",
+    "unresolved_issues",
+    "residual_risks",
+    "recommended_evaluator_focus"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "mode": { "enum": ["initial", "fix"] },
+    "summary": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "changed_files": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/changed_file" }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "$ref": "agentflow.schema.common.v1#/$defs/verification_result"
+      }
+    },
+    "criteria_mapping": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/criteria_mapping" }
+    },
+    "scope_notes": {
+      "type": "object",
+      "required": ["status", "out_of_scope_paths", "explanation"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "within_scope",
+            "scope_exception_needed",
+            "out_of_scope_violation"
+          ]
+        },
+        "out_of_scope_paths": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/relative_path" }
+        },
+        "explanation": { "type": "string" }
+      }
+    },
+    "unresolved_issues": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "residual_risks": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "recommended_evaluator_focus": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.artifact.unit_decision.v1",
+  "title": "Unit decision artifact",
+  "allOf": [
+    { "$ref": "agentflow.schema.common.v1#/$defs/canonical_envelope" },
+    {
+      "type": "object",
+      "required": ["unit_id"],
+      "properties": {
+        "schema_version": { "const": "agentflow.unit_decision.v1" },
+        "artifact_type": { "const": "unit_decision" },
+        "payload": {
+          "type": "object",
+          "required": [
+            "decision",
+            "reason_code",
+            "evaluator_report",
+            "failure_classification",
+            "evidence_refs",
+            "rule_triggered",
+            "rejected_paths",
+            "fix_round",
+            "max_fix_rounds"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "decision": { "enum": ["pass", "fix", "re_evaluate", "stop"] },
+            "reason_code": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            },
+            "evaluator_report": {
+              "$ref": "agentflow.schema.common.v1#/$defs/artifact_ref"
+            },
+            "target_failures": {
+              "type": "array",
+              "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+            },
+            "failure_classification": {
+              "enum": [
+                "implementation_failure",
+                "test_failure",
+                "environment_failure",
+                "contract_gap",
+                "unsafe",
+                "insufficient_evidence",
+                "none"
+              ]
+            },
+            "evidence_refs": {
+              "type": "array",
+              "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+            },
+            "rule_triggered": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            },
+            "rejected_paths": {
+              "type": "array",
+              "items": { "enum": ["pass", "fix", "re_evaluate", "stop"] }
+            },
+            "next_pipeline": {
+              "type": ["object", "null"],
+              "additionalProperties": true
+            },
+            "fix_round": { "type": "integer", "minimum": 0 },
+            "max_fix_rounds": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    }
+  ]
+}

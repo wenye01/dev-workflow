@@ -1,0 +1,20 @@
+{
+  "overall": "fail",
+  "summary": "This payload incorrectly allows completion on failure.",
+  "contract_completeness": {
+    "status": "complete",
+    "missing": []
+  },
+  "evidence_sufficiency": "sufficient_for_fail",
+  "criteria_results": [],
+  "evidence": [],
+  "failures": [],
+  "plan_gaps": [],
+  "environment_issues": [],
+  "unsafe_findings": [],
+  "allow_unit_complete": true,
+  "allow_batch_continue": false,
+  "eligible_next_actions": ["stop"],
+  "blocked_next_actions": [],
+  "residual_risks": []
+}

@@ -1,0 +1,244 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.common.v1",
+  "title": "Agentflow common schema definitions",
+  "$defs": {
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_ref": {
+      "type": "string",
+      "pattern": "^\\.agentflow(?:/[A-Za-z0-9._-]+)+$"
+    },
+    "relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "pattern": "^/" },
+          { "pattern": "\\\\" },
+          { "pattern": "(^|/)\\.\\.(/|$)" }
+        ]
+      }
+    },
+    "ref_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "producer": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": ["orchestrator", "router", "role", "adapter", "system"]
+        },
+        "module": {
+          "enum": ["planner", "generator", "evaluator", "decision", "finalize"]
+        },
+        "role": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "provider": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "model": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        }
+      }
+    },
+    "commit_ref": {
+      "type": "object",
+      "required": ["sha"],
+      "additionalProperties": false,
+      "properties": {
+        "sha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{7,64}$"
+        },
+        "ref": { "type": "string" },
+        "subject": { "type": "string" },
+        "committedAt": { "type": "string" }
+      }
+    },
+    "changed_file": {
+      "type": "object",
+      "required": ["path", "change_type", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "$ref": "agentflow.schema.common.v1#/$defs/relative_path" },
+        "change_type": {
+          "enum": [
+            "added",
+            "modified",
+            "deleted",
+            "renamed",
+            "generated",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        }
+      }
+    },
+    "verification_result": {
+      "type": "object",
+      "required": ["command", "kind", "status", "summary"],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "kind": {
+          "enum": [
+            "test",
+            "lint",
+            "typecheck",
+            "build",
+            "e2e",
+            "security_scan",
+            "custom"
+          ]
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "timed_out",
+            "skipped",
+            "blocked",
+            "not_run"
+          ]
+        },
+        "summary": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "relevant_output": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["ref", "type", "summary", "supports", "confidence"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+        "type": {
+          "enum": [
+            "test_result",
+            "lint_result",
+            "typecheck_result",
+            "build_result",
+            "diff_reference",
+            "file_reference",
+            "static_review",
+            "security_review",
+            "contract_analysis",
+            "context_gap",
+            "commit_reference",
+            "log_excerpt"
+          ]
+        },
+        "summary": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "supports": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+        },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      }
+    },
+    "criteria_mapping": {
+      "type": "object",
+      "required": ["criterion", "status", "evidence", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "criterion": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+        "status": {
+          "enum": [
+            "satisfied",
+            "partially_satisfied",
+            "not_satisfied",
+            "not_checked",
+            "not_evaluable"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "severity": {
+      "enum": ["must", "should", "could"]
+    },
+    "risk": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "required": ["description"],
+          "additionalProperties": true,
+          "properties": {
+            "description": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            },
+            "severity": { "$ref": "agentflow.schema.common.v1#/$defs/severity" }
+          }
+        }
+      ]
+    },
+    "canonical_envelope": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "artifact_type",
+        "artifact_id",
+        "run_id",
+        "producer",
+        "input_artifacts",
+        "created_at",
+        "payload",
+        "commit_refs"
+      ],
+      "properties": {
+        "schema_version": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "artifact_type": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "artifact_id": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "run_id": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "batch_id": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "unit_id": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "attempt": { "type": "integer", "minimum": 0 },
+        "fix_round": { "type": "integer", "minimum": 0 },
+        "producer": { "$ref": "agentflow.schema.common.v1#/$defs/producer" },
+        "input_artifacts": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/artifact_ref" }
+        },
+        "created_at": {
+          "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+        },
+        "payload": {},
+        "commit_refs": {
+          "type": "array",
+          "items": { "$ref": "agentflow.schema.common.v1#/$defs/commit_ref" }
+        }
+      }
+    }
+  }
+}
