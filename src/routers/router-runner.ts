@@ -6,10 +6,18 @@ import { artifactPath, routingPath } from '../artifacts/paths.js';
 import type { ArtifactRef } from '../core/types.js';
 import { AdapterManager } from '../adapters/adapter-manager.js';
 import { loadAgentflowConfig } from '../config/config-loader.js';
-import { SchemaRegistry, type LlmPayloadType, type ArtifactType } from '../schemas/registry.js';
+import {
+  SchemaRegistry,
+  type LlmPayloadType,
+  type ArtifactType,
+} from '../schemas/registry.js';
 import { parseJsonObject } from '../schemas/validator.js';
 
-type RouterOutputType = 'router_dispatch' | 'planner_package' | 'change_package' | 'evaluator_report';
+type RouterOutputType =
+  | 'router_dispatch'
+  | 'planner_package'
+  | 'change_package'
+  | 'evaluator_report';
 
 const ROUTER_OUTPUT_MAPPING: Readonly<
   Record<
@@ -52,7 +60,9 @@ export interface RouterRouteRunOptions {
   readonly requiredOutputSchemas?: Readonly<Record<string, string>>;
   readonly roleOutputArtifacts?: Readonly<Record<string, ArtifactRef>>;
   readonly selectedProjectContext?: Record<string, unknown>;
-  readonly selectedProjectContexts?: Readonly<Record<string, Record<string, unknown>>>;
+  readonly selectedProjectContexts?: Readonly<
+    Record<string, Record<string, unknown>>
+  >;
   readonly defaultRequiredOutputSchema?: string;
   readonly outputArtifactRef?: ArtifactRef;
 }
@@ -212,7 +222,7 @@ export class RouterRunner {
   private async runRouterAdapter(
     options:
       | RouterRouteRunOptions
-      | RouterAggregateRunOptions & { readonly outputArtifact: ArtifactRef },
+      | (RouterAggregateRunOptions & { readonly outputArtifact: ArtifactRef }),
   ): Promise<Record<string, unknown>> {
     const config = await loadAgentflowConfig(options.configPath);
     const adapterManager = new AdapterManager(config, {
@@ -231,7 +241,9 @@ export class RouterRunner {
     });
 
     if (!result.outputArtifact) {
-      throw new Error(`Router role did not write an output artifact: ${options.role}`);
+      throw new Error(
+        `Router role did not write an output artifact: ${options.role}`,
+      );
     }
 
     const filePath = path.resolve(options.runRoot, result.outputArtifact);
@@ -262,9 +274,7 @@ function extractSelectedRoles(payload: unknown): readonly {
       role: String(selectedRole.role ?? ''),
       task: isRecord(selectedRole.task) ? selectedRole.task : {},
       context: isRecord(selectedRole.context) ? selectedRole.context : {},
-      write_permission: normalizeWritePermission(
-        selectedRole.write_permission,
-      ),
+      write_permission: normalizeWritePermission(selectedRole.write_permission),
       provider_hint:
         typeof selectedRole.provider_hint === 'string'
           ? selectedRole.provider_hint
@@ -299,7 +309,9 @@ function buildRoleRunRequestPayload(options: {
     ...(options.inputArtifacts.length > 0
       ? { input_artifacts: options.inputArtifacts }
       : {}),
-    ...(options.outputArtifact ? { output_artifact: options.outputArtifact } : {}),
+    ...(options.outputArtifact
+      ? { output_artifact: options.outputArtifact }
+      : {}),
     required_output_schema:
       options.requiredOutputSchema || options.defaultRequiredOutputSchema,
   };
@@ -326,7 +338,9 @@ function normalizeWritePermission(
   return 'readonly';
 }
 
-function inferModuleFromRole(role: string): 'planner' | 'generator' | 'evaluator' | 'decision' | 'finalize' {
+function inferModuleFromRole(
+  role: string,
+): 'planner' | 'generator' | 'evaluator' | 'decision' | 'finalize' {
   if (role.startsWith('planner.')) {
     return 'planner';
   }

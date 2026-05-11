@@ -22,22 +22,24 @@ export function registerToolCommand(program: Command): void {
     .description('Read run state and optionally one unit state.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .option('--unit <unit_id>', 'Unit id')
-    .action(async (options: { readonly runDir: string; readonly unit?: string }) => {
-      try {
-        const toolbox = new RouterToolbox(options.runDir);
-        const runState = await toolbox.readRunState();
-        const result: Record<string, unknown> = { run_state: runState };
+    .action(
+      async (options: { readonly runDir: string; readonly unit?: string }) => {
+        try {
+          const toolbox = new RouterToolbox(options.runDir);
+          const runState = await toolbox.readRunState();
+          const result: Record<string, unknown> = { run_state: runState };
 
-        if (options.unit) {
-          result.unit_state = await toolbox.readUnitState(options.unit);
+          if (options.unit) {
+            result.unit_state = await toolbox.readUnitState(options.unit);
+          }
+
+          console.log(JSON.stringify(result, null, 2));
+        } catch (error) {
+          process.exitCode = 2;
+          console.error(JSON.stringify(formatToolError(error), null, 2));
         }
-
-        console.log(JSON.stringify(result, null, 2));
-      } catch (error) {
-        process.exitCode = 2;
-        console.error(JSON.stringify(formatToolError(error), null, 2));
-      }
-    });
+      },
+    );
 
   const artifact = tool
     .command('artifact')
@@ -48,25 +50,27 @@ export function registerToolCommand(program: Command): void {
     .description('Read one artifact by ref.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .requiredOption('--ref <artifact_ref>', 'Artifact ref under .agentflow')
-    .action(async (options: { readonly runDir: string; readonly ref: string }) => {
-      try {
-        const toolbox = new RouterToolbox(options.runDir);
-        const artifact = await toolbox.readArtifact(options.ref);
-        console.log(
-          JSON.stringify(
-            {
-              ref: options.ref,
-              artifact,
-            },
-            null,
-            2,
-          ),
-        );
-      } catch (error) {
-        process.exitCode = 2;
-        console.error(JSON.stringify(formatToolError(error), null, 2));
-      }
-    });
+    .action(
+      async (options: { readonly runDir: string; readonly ref: string }) => {
+        try {
+          const toolbox = new RouterToolbox(options.runDir);
+          const artifact = await toolbox.readArtifact(options.ref);
+          console.log(
+            JSON.stringify(
+              {
+                ref: options.ref,
+                artifact,
+              },
+              null,
+              2,
+            ),
+          );
+        } catch (error) {
+          process.exitCode = 2;
+          console.error(JSON.stringify(formatToolError(error), null, 2));
+        }
+      },
+    );
 
   artifact
     .command('index')
@@ -95,28 +99,33 @@ export function registerToolCommand(program: Command): void {
       '--name <name>',
       'Context name: project-index-ref, selected-project-context, or worktree-status',
     )
-    .action(async (options: { readonly runDir: string; readonly name: string }) => {
-      try {
-        const toolbox = new RouterToolbox(options.runDir);
-        const context = await toolbox.readContext(
-          options.name as 'project-index-ref' | 'selected-project-context' | 'worktree-status',
-        );
-        console.log(
-          JSON.stringify(
-            {
-              name: context.name,
-              ref: context.ref,
-              artifact: context.value,
-            },
-            null,
-            2,
-          ),
-        );
-      } catch (error) {
-        process.exitCode = 2;
-        console.error(JSON.stringify(formatToolError(error), null, 2));
-      }
-    });
+    .action(
+      async (options: { readonly runDir: string; readonly name: string }) => {
+        try {
+          const toolbox = new RouterToolbox(options.runDir);
+          const context = await toolbox.readContext(
+            options.name as
+              | 'project-index-ref'
+              | 'selected-project-context'
+              | 'worktree-status',
+          );
+          console.log(
+            JSON.stringify(
+              {
+                name: context.name,
+                ref: context.ref,
+                artifact: context.value,
+              },
+              null,
+              2,
+            ),
+          );
+        } catch (error) {
+          process.exitCode = 2;
+          console.error(JSON.stringify(formatToolError(error), null, 2));
+        }
+      },
+    );
 
   const roleCatalog = tool
     .command('role-catalog')
@@ -202,7 +211,9 @@ export function registerToolCommand(program: Command): void {
       try {
         const toolbox = new RouterToolbox(options.runDir);
         const worktreeStatus = await toolbox.readWorktreeStatus();
-        console.log(JSON.stringify({ worktree_status: worktreeStatus }, null, 2));
+        console.log(
+          JSON.stringify({ worktree_status: worktreeStatus }, null, 2),
+        );
       } catch (error) {
         process.exitCode = 2;
         console.error(JSON.stringify(formatToolError(error), null, 2));

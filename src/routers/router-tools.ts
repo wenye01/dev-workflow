@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
-import { artifactIndexPath, parseArtifactRef, resolveArtifactRef, unitStatePath } from '../artifacts/paths.js';
+import {
+  artifactIndexPath,
+  parseArtifactRef,
+  resolveArtifactRef,
+  unitStatePath,
+} from '../artifacts/paths.js';
 import type { ArtifactRef } from '../core/types.js';
 import { asUnitId } from '../core/types.js';
 import { SchemaRegistry } from '../schemas/registry.js';
@@ -98,7 +103,9 @@ export function contextArtifactRef(name: RouterContextName): ArtifactRef {
   return parseArtifactRef('.agentflow/inputs/worktree-status.json');
 }
 
-async function readJsonFile(filePath: string): Promise<Record<string, unknown>> {
+async function readJsonFile(
+  filePath: string,
+): Promise<Record<string, unknown>> {
   const raw = await readFile(filePath, 'utf8');
   return parseJsonObject(raw);
 }

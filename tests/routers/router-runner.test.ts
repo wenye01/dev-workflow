@@ -5,7 +5,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { RouterRunner } from '../../src/routers/router-runner.js';
-import { parseArtifactRef, resolveArtifactRef } from '../../src/artifacts/paths.js';
+import {
+  parseArtifactRef,
+  resolveArtifactRef,
+} from '../../src/artifacts/paths.js';
 import { SchemaRegistry } from '../../src/schemas/registry.js';
 
 describe('RouterRunner', () => {
@@ -20,7 +23,9 @@ describe('RouterRunner', () => {
       requestId: 'request-001',
       role: 'planner.router',
       prompt: 'route the work',
-      outputArtifact: parseArtifactRef('.agentflow/routing/raw-router-output.json'),
+      outputArtifact: parseArtifactRef(
+        '.agentflow/routing/raw-router-output.json',
+      ),
       rawPayload: await readJsonFixture('valid-router-dispatch.json'),
       roleOutputArtifacts: {
         'generator.implementer': parseArtifactRef(
@@ -59,7 +64,8 @@ describe('RouterRunner', () => {
       payload: {
         request_id: 'request-001-1',
         role: 'generator.implementer',
-        output_artifact: '.agentflow/units/unit-001/roles/generator-output.json',
+        output_artifact:
+          '.agentflow/units/unit-001/roles/generator-output.json',
       },
     });
 
@@ -68,7 +74,10 @@ describe('RouterRunner', () => {
       'routing_decision',
       JSON.parse(
         await readFile(
-          resolveArtifactRef(runRoot, parseArtifactRef('.agentflow/routing/decision.json')),
+          resolveArtifactRef(
+            runRoot,
+            parseArtifactRef('.agentflow/routing/decision.json'),
+          ),
           'utf8',
         ),
       ),
@@ -79,7 +88,9 @@ describe('RouterRunner', () => {
         await readFile(
           resolveArtifactRef(
             runRoot,
-            parseArtifactRef('.agentflow/routing/requests/1-generator.implementer.json'),
+            parseArtifactRef(
+              '.agentflow/routing/requests/1-generator.implementer.json',
+            ),
           ),
           'utf8',
         ),
@@ -88,7 +99,9 @@ describe('RouterRunner', () => {
   });
 
   it('writes validated aggregate artifacts', async () => {
-    const runRoot = await mkdtemp(path.join(tmpdir(), 'agentflow-router-aggregate-'));
+    const runRoot = await mkdtemp(
+      path.join(tmpdir(), 'agentflow-router-aggregate-'),
+    );
     await writeConfig(runRoot);
     const runner = new RouterRunner(SchemaRegistry.load());
 

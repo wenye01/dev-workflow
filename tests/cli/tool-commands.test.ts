@@ -237,7 +237,12 @@ async function writeTree(runDir: string): Promise<void> {
       'utf8',
     ),
     writeFile(
-      path.join(runDir, '.agentflow', 'context', 'selected-project-context.json'),
+      path.join(
+        runDir,
+        '.agentflow',
+        'context',
+        'selected-project-context.json',
+      ),
       JSON.stringify(
         {
           project_index_refs: {
