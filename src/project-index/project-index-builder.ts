@@ -2,7 +2,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ArtifactRef } from '../core/types.js';
-import { GitService } from '../git/git-service.js';
 import {
   PROJECT_INDEX_SCHEMA_IDS,
   SchemaRegistry,
@@ -10,6 +9,7 @@ import {
 import { discoverCommands } from './command-discovery.js';
 import { buildDocumentIndex } from './document-indexer.js';
 import { readFreshManifest } from './freshness.js';
+import { resolveGitRepository } from './git.js';
 import { buildModuleIndexes } from './module-indexer.js';
 import { buildOverview, renderOverviewMarkdown } from './overview-builder.js';
 import { scanRepository } from './repo-scanner.js';
@@ -51,7 +51,6 @@ interface PendingArtifact {
 }
 
 export class ProjectIndexBuilder {
-  private readonly git = new GitService();
   private readonly registry: SchemaRegistry;
 
   constructor(registry = SchemaRegistry.load()) {
@@ -61,7 +60,7 @@ export class ProjectIndexBuilder {
   async build(
     options: ProjectIndexBuildOptions,
   ): Promise<ProjectIndexBuildResult> {
-    const repoInfo = await this.git.validateRepository(options.repoPath);
+    const repoInfo = await resolveGitRepository(options.repoPath);
     const out = resolveProjectIndexOut(
       repoInfo.repoRoot,
       options.outDir ?? '.agentflow/project-index',
