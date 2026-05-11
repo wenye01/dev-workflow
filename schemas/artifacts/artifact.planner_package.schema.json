@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.artifact.planner_package.v1",
+  "title": "Planner package artifact",
+  "allOf": [
+    { "$ref": "agentflow.schema.common.v1#/$defs/canonical_envelope" },
+    {
+      "type": "object",
+      "properties": {
+        "schema_version": { "const": "agentflow.planner_package.v1" },
+        "artifact_type": { "const": "planner_package" },
+        "payload": { "$ref": "agentflow.schema.llm.planner_package.v1" }
+      }
+    }
+  ]
+}

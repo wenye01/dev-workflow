@@ -1,0 +1,303 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.llm.planner_package.v1",
+  "title": "LLM planner package payload",
+  "type": "object",
+  "required": [
+    "goal",
+    "success_definition",
+    "non_goals",
+    "technical_constraints",
+    "known_facts",
+    "inferred_context",
+    "units",
+    "batches",
+    "contracts",
+    "routing_hints",
+    "risks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "goal": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "success_definition": {
+      "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+    },
+    "non_goals": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" }
+    },
+    "technical_constraints": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" }
+    },
+    "known_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "fact": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "source": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "inferred_context": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["inference", "basis", "confidence"],
+        "additionalProperties": false,
+        "properties": {
+          "inference": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "basis": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "confidence": { "enum": ["high", "medium", "low"] }
+        }
+      }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "ref",
+          "title",
+          "goal",
+          "scope",
+          "dependencies",
+          "recommended_generators",
+          "recommended_evaluators",
+          "risk_level",
+          "max_fix_rounds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ref": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "title": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "goal": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "scope": {
+            "type": "object",
+            "required": ["allowed_paths", "forbidden_paths"],
+            "additionalProperties": false,
+            "properties": {
+              "allowed_paths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                }
+              },
+              "forbidden_paths": {
+                "type": "array",
+                "items": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                }
+              }
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+          },
+          "recommended_generators": {
+            "type": "array",
+            "items": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            }
+          },
+          "recommended_evaluators": {
+            "type": "array",
+            "items": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            }
+          },
+          "risk_level": { "enum": ["low", "medium", "high"] },
+          "max_fix_rounds": { "type": "integer", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "batches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["unit_refs", "parallel"],
+        "additionalProperties": false,
+        "properties": {
+          "unit_refs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 1,
+            "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+          },
+          "parallel": { "type": "boolean" }
+        }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "unit_ref",
+          "objective",
+          "criteria",
+          "forbidden_changes",
+          "evaluator_focus",
+          "auto_fix_hints"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "unit_ref": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "objective": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "ref",
+                "description",
+                "severity",
+                "evidence_required",
+                "verification"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "ref": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+                "description": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                },
+                "severity": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/severity"
+                },
+                "evidence_required": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "test_result",
+                      "lint_result",
+                      "typecheck_result",
+                      "build_result",
+                      "diff_reference",
+                      "file_reference",
+                      "static_review",
+                      "security_review",
+                      "contract_analysis",
+                      "context_gap"
+                    ]
+                  }
+                },
+                "verification": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["type", "command", "expected"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "type": {
+                        "enum": [
+                          "command",
+                          "file",
+                          "diff",
+                          "manual_unverifiable"
+                        ]
+                      },
+                      "command": { "type": "string" },
+                      "expected": { "type": "string" },
+                      "reason": { "type": "string" }
+                    }
+                  }
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": { "severity": { "const": "must" } },
+                    "required": ["severity"]
+                  },
+                  "then": {
+                    "properties": {
+                      "evidence_required": { "minItems": 1 },
+                      "verification": { "minItems": 1 }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "forbidden_changes": {
+            "type": "array",
+            "items": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            }
+          },
+          "evaluator_focus": {
+            "type": "array",
+            "items": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            }
+          },
+          "auto_fix_hints": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["failure_type", "role_hint"],
+              "additionalProperties": false,
+              "properties": {
+                "failure_type": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                },
+                "role_hint": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "routing_hints": {
+      "type": "object",
+      "required": ["generator", "evaluator"],
+      "additionalProperties": false,
+      "properties": {
+        "generator": {
+          "type": "array",
+          "items": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        },
+        "evaluator": {
+          "type": "array",
+          "items": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    }
+  }
+}

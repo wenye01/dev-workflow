@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.artifact.run_state.v1",
+  "title": "Run state artifact",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "status",
+    "worktree_path",
+    "workspace_mode",
+    "started_at",
+    "updated_at",
+    "budgets",
+    "counters",
+    "stop_reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "agentflow.run_state.v1" },
+    "run_id": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "status": {
+      "enum": ["initializing", "running", "stopping", "stopped", "finalized"]
+    },
+    "base_ref": { "type": "string" },
+    "branch": { "type": "string" },
+    "worktree_path": {
+      "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+    },
+    "workspace_mode": { "const": "git_worktree" },
+    "current_batch_id": { "type": ["string", "null"] },
+    "started_at": {
+      "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+    },
+    "updated_at": {
+      "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+    },
+    "last_stable_state": { "type": ["string", "null"] },
+    "resume_from": { "type": ["string", "null"] },
+    "config_snapshot_ref": {
+      "anyOf": [
+        { "$ref": "agentflow.schema.common.v1#/$defs/artifact_ref" },
+        { "type": "null" }
+      ]
+    },
+    "budgets": {
+      "type": "object",
+      "required": [
+        "max_batches",
+        "max_units",
+        "max_fix_rounds",
+        "max_evaluator_retries"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "max_batches": { "type": "integer", "minimum": 1 },
+        "max_units": { "type": "integer", "minimum": 1 },
+        "max_fix_rounds": { "type": "integer", "minimum": 0 },
+        "max_evaluator_retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "counters": {
+      "type": "object",
+      "required": [
+        "cli_processes_started",
+        "commits_created",
+        "schema_failures",
+        "fix_loops"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cli_processes_started": { "type": "integer", "minimum": 0 },
+        "commits_created": { "type": "integer", "minimum": 0 },
+        "schema_failures": { "type": "integer", "minimum": 0 },
+        "fix_loops": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "stop_reason": { "type": ["string", "null"] }
+  }
+}

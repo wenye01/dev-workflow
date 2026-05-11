@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.artifact.evaluator_report.v1",
+  "title": "Evaluator report artifact",
+  "allOf": [
+    { "$ref": "agentflow.schema.common.v1#/$defs/canonical_envelope" },
+    {
+      "type": "object",
+      "required": ["unit_id", "attempt"],
+      "properties": {
+        "schema_version": { "const": "agentflow.evaluator_report.v1" },
+        "artifact_type": { "const": "evaluator_report" },
+        "payload": { "$ref": "agentflow.schema.llm.evaluator_report.v1" }
+      }
+    }
+  ]
+}

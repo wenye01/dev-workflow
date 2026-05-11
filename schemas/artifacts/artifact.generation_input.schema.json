@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.artifact.generation_input.v1",
+  "title": "Generation input artifact",
+  "allOf": [
+    { "$ref": "agentflow.schema.common.v1#/$defs/canonical_envelope" },
+    {
+      "type": "object",
+      "required": ["unit_id"],
+      "properties": {
+        "schema_version": { "const": "agentflow.generation_input.v1" },
+        "artifact_type": { "const": "generation_input" },
+        "payload": {
+          "type": "object",
+          "required": [
+            "mode",
+            "unit",
+            "acceptance_contract",
+            "context",
+            "constraints"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["initial", "fix"] },
+            "unit": { "type": "object", "additionalProperties": true },
+            "acceptance_contract": {
+              "type": "object",
+              "additionalProperties": true
+            },
+            "context": { "type": "object", "additionalProperties": true },
+            "constraints": { "type": "object", "additionalProperties": true },
+            "previous_failures": {
+              "type": "array",
+              "items": { "type": "object", "additionalProperties": true }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

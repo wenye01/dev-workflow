@@ -1,0 +1,40 @@
+{
+  "status": "completed",
+  "summary": "Implemented refresh-token handling.",
+  "changed_files": [
+    {
+      "path": "src/auth/service.ts",
+      "change_type": "modified",
+      "reason": "Issue refresh tokens."
+    }
+  ],
+  "verification": [
+    {
+      "command": "npm test -- auth",
+      "kind": "test",
+      "status": "passed",
+      "summary": "Auth tests passed."
+    }
+  ],
+  "criteria_mapping": [
+    {
+      "criterion": "criterion-refresh-issued",
+      "status": "satisfied",
+      "evidence": ["ev-tests-auth"],
+      "notes": "Covered by auth tests."
+    }
+  ],
+  "evidence": [
+    {
+      "ref": "ev-tests-auth",
+      "type": "test_result",
+      "summary": "npm test -- auth passed.",
+      "supports": ["criterion-refresh-issued"],
+      "confidence": "high"
+    }
+  ],
+  "issues": [],
+  "risks": [],
+  "plan_gap_signals": [],
+  "details": ""
+}

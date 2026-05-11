@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.llm.role_output.v1",
+  "title": "LLM role output payload",
+  "type": "object",
+  "required": ["status", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "completed",
+        "completed_with_issues",
+        "no_change",
+        "blocked",
+        "failed",
+        "unsafe"
+      ]
+    },
+    "summary": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "changed_files": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/changed_file" }
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "$ref": "agentflow.schema.common.v1#/$defs/verification_result"
+      }
+    },
+    "criteria_mapping": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/criteria_mapping" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/evidence" }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "required": ["description"],
+            "additionalProperties": true,
+            "properties": {
+              "description": {
+                "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "plan_gap_signals": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "findings": { "type": "object", "additionalProperties": true },
+    "drafts": { "type": "object", "additionalProperties": true },
+    "criteria_results": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "failures": {
+      "type": "array",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "details": { "type": "string" }
+  }
+}

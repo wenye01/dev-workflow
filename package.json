@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
     "commander": "^12.1.0"
   },
   "devDependencies": {

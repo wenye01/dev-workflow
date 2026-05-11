@@ -1,0 +1,180 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.llm.evaluator_report.v1",
+  "title": "LLM evaluator report payload",
+  "type": "object",
+  "required": [
+    "overall",
+    "summary",
+    "contract_completeness",
+    "evidence_sufficiency",
+    "criteria_results",
+    "evidence",
+    "failures",
+    "plan_gaps",
+    "environment_issues",
+    "unsafe_findings",
+    "allow_unit_complete",
+    "allow_batch_continue",
+    "eligible_next_actions",
+    "blocked_next_actions",
+    "residual_risks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "overall": { "enum": ["pass", "pass_with_risk", "fail", "unsafe"] },
+    "summary": { "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string" },
+    "contract_completeness": {
+      "type": "object",
+      "required": ["status", "missing"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["complete", "incomplete"] },
+        "missing": {
+          "type": "array",
+          "items": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "evidence_sufficiency": {
+      "enum": ["sufficient_for_pass", "sufficient_for_fail", "insufficient"]
+    },
+    "criteria_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["criterion", "status", "severity", "evidence", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "criterion": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "status": {
+            "enum": ["pass", "fail", "not_evaluable", "not_checked"]
+          },
+          "severity": { "$ref": "agentflow.schema.common.v1#/$defs/severity" },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+          },
+          "reason": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/evidence" }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ref",
+          "criterion",
+          "description",
+          "classification",
+          "severity",
+          "auto_fixable",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ref": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "criterion": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" },
+          "description": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          },
+          "classification": {
+            "enum": [
+              "implementation_failure",
+              "test_failure",
+              "environment_failure",
+              "contract_gap",
+              "unsafe",
+              "insufficient_evidence"
+            ]
+          },
+          "severity": { "$ref": "agentflow.schema.common.v1#/$defs/severity" },
+          "auto_fixable": { "type": "boolean" },
+          "suggested_fix": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "role_hint": { "type": "string" },
+              "scope_hint": {
+                "type": "array",
+                "items": {
+                  "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+                }
+              },
+              "instructions": { "type": "string" }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": { "$ref": "agentflow.schema.common.v1#/$defs/ref_id" }
+          }
+        }
+      }
+    },
+    "plan_gaps": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "environment_issues": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "unsafe_findings": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    },
+    "allow_unit_complete": { "type": "boolean" },
+    "allow_batch_continue": { "type": "boolean" },
+    "eligible_next_actions": {
+      "type": "array",
+      "items": { "enum": ["pass", "fix", "re_evaluate", "stop"] }
+    },
+    "blocked_next_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["action", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "action": { "enum": ["pass", "fix", "re_evaluate", "stop"] },
+          "reason": {
+            "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "residual_risks": {
+      "type": "array",
+      "items": { "$ref": "agentflow.schema.common.v1#/$defs/risk" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "overall": { "enum": ["fail", "unsafe"] } },
+        "required": ["overall"]
+      },
+      "then": {
+        "properties": { "allow_unit_complete": { "const": false } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "evidence_sufficiency": { "const": "insufficient" } },
+        "required": ["evidence_sufficiency"]
+      },
+      "then": {
+        "properties": { "allow_unit_complete": { "const": false } }
+      }
+    }
+  ]
+}
