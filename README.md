@@ -17,12 +17,18 @@ agentflow validate <artifact>
 agentflow doctor --config <file>
 ```
 
+`agentflow run` currently initializes through the Milestone 5 Context Builder:
+it builds or reuses Project Index artifacts, writes selected context, source
+slices, and Planner/Generator/Evaluator role inputs, then stops before Planner
+runtime.
+
 ## Development
 
 ```bash
 nvm use
 npm install
 npm test
+npm run test:context
 npm run build
 npm pack
 ```

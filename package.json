@@ -25,6 +25,7 @@
     "lint": "eslint .",
     "prepack": "npm run build",
     "test": "vitest run",
+    "test:context": "vitest run tests/context",
     "test:project-index": "vitest run tests/project-index",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

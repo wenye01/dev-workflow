@@ -20,11 +20,20 @@ describe('agentflow CLI', () => {
       (command) => command.name() === 'run',
     );
 
-    expect(run?.options.map((option) => option.long)).toEqual([
-      '--repo',
-      '--task',
-      '--config',
-    ]);
-    expect(run?.options.every((option) => option.required)).toBe(true);
+    expect(
+      run?.options
+        .filter((option) => option.mandatory)
+        .map((option) => option.long),
+    ).toEqual(['--repo', '--task', '--config']);
+    expect(run?.options.map((option) => option.long)).toEqual(
+      expect.arrayContaining([
+        '--repo',
+        '--task',
+        '--config',
+        '--project-index-dir',
+        '--force-project-index',
+        '--run-id',
+      ]),
+    );
   });
 });

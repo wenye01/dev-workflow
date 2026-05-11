@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "agentflow.schema.context.selected_project_context.v1",
+  "title": "Context Builder selected project context",
+  "$ref": "agentflow.schema.project_index.common.v1#/$defs/selected_project_context"
+}
