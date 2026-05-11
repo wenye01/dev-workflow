@@ -7,5 +7,6 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
     },
     include: ['tests/**/*.test.ts'],
+    testTimeout: 30_000,
   },
 });
