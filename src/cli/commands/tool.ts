@@ -1,5 +1,11 @@
 import type { Command } from 'commander';
 
+import {
+  ConfigError,
+  loadAgentflowConfig,
+} from '../../config/config-loader.js';
+import { ProviderRegistry } from '../../config/provider-registry.js';
+import { RoleCatalog, RoleCatalogError } from '../../config/role-catalog.js';
 import { addJsonOutputNote, failNotImplemented } from './shared.js';
 
 export function registerToolCommand(program: Command): void {
@@ -55,7 +61,29 @@ export function registerToolCommand(program: Command): void {
     .command('list')
     .description('List role catalog entries.')
     .requiredOption('--config <file>', 'Agentflow config file')
-    .action(() => failNotImplemented('tool role-catalog list'));
+    .action(async (options: { readonly config: string }) => {
+      try {
+        const config = await loadAgentflowConfig(options.config);
+        const catalog = new RoleCatalog(config);
+        console.log(
+          JSON.stringify(
+            {
+              roles: catalog.list().map((role) => ({
+                name: role.name,
+                module: role.module,
+                write_permission: role.writePermission,
+                provider_candidates: role.providerCandidates,
+              })),
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   const provider = tool
     .command('provider')
@@ -65,7 +93,37 @@ export function registerToolCommand(program: Command): void {
     .command('capabilities')
     .description('List provider capabilities derived from config.')
     .requiredOption('--config <file>', 'Agentflow config file')
-    .action(() => failNotImplemented('tool provider capabilities'));
+    .action(async (options: { readonly config: string }) => {
+      try {
+        const config = await loadAgentflowConfig(options.config);
+        const registry = new ProviderRegistry(config.providers);
+        const providers = await Promise.all(
+          registry.list().map(async (providerConfig) => {
+            const readiness = await registry.inspect(
+              providerConfig,
+              {},
+              { checkCommandAvailability: false },
+            );
+
+            return {
+              provider: readiness.provider,
+              type: readiness.type,
+              command: readiness.command,
+              available: readiness.available,
+              authenticated: readiness.authenticated,
+              concurrency: readiness.concurrency,
+              capabilities: readiness.capabilities,
+              issues: readiness.issues,
+            };
+          }),
+        );
+
+        console.log(JSON.stringify({ providers }, null, 2));
+      } catch (error) {
+        process.exitCode = 2;
+        console.error(JSON.stringify(formatToolError(error), null, 2));
+      }
+    });
 
   const worktree = tool
     .command('worktree')
@@ -82,4 +140,22 @@ export function registerToolCommand(program: Command): void {
     .description('Read a summary of worktree changes.')
     .requiredOption('--run-dir <path>', 'Run directory containing .agentflow')
     .action(() => failNotImplemented('tool worktree diff-summary'));
+}
+
+function formatToolError(error: unknown): Record<string, unknown> {
+  if (error instanceof ConfigError || error instanceof RoleCatalogError) {
+    return {
+      error: {
+        code: error.code,
+        message: error.message,
+      },
+    };
+  }
+
+  return {
+    error: {
+      code: 'AGENTFLOW_TOOL_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+    },
+  };
 }
