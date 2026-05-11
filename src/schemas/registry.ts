@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   JsonSchemaValidator,
@@ -103,9 +104,7 @@ export class SchemaRegistry {
     this.validator = validator;
   }
 
-  static load(
-    schemaRoot = path.resolve(process.cwd(), 'schemas'),
-  ): SchemaRegistry {
+  static load(schemaRoot = defaultSchemaRoot()): SchemaRegistry {
     return new SchemaRegistry(
       new JsonSchemaValidator(loadJsonSchemas(schemaRoot)),
     );
@@ -151,6 +150,20 @@ export class SchemaRegistry {
   schemaIds(): readonly string[] {
     return this.validator.schemaIds();
   }
+}
+
+function defaultSchemaRoot(): string {
+  const cwdSchemaRoot = path.resolve(process.cwd(), 'schemas');
+  if (existsSync(cwdSchemaRoot)) {
+    return cwdSchemaRoot;
+  }
+
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'schemas',
+  );
 }
 
 function classificationForSchemaId(
