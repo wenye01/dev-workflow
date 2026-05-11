@@ -1,6 +1,13 @@
 name: Cross Platform
 
 on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+      - 'codex/**'
   workflow_dispatch:
   repository_dispatch:
     types:
