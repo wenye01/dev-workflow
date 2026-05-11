@@ -3,19 +3,6 @@
   "success_definition": "The must criterion passes and a final report can be generated.",
   "non_goals": ["Do not deploy."],
   "technical_constraints": ["Keep login API response shape compatible."],
-  "known_facts": [
-    {
-      "fact": "Authentication code lives under src/auth.",
-      "source": "repo-context"
-    }
-  ],
-  "inferred_context": [
-    {
-      "inference": "Tests likely belong under tests/auth.",
-      "basis": "Existing test layout.",
-      "confidence": "medium"
-    }
-  ],
   "units": [
     {
       "ref": "auth-refresh",

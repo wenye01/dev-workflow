@@ -28,8 +28,11 @@
               "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
             },
             "task": { "type": "object", "additionalProperties": true },
-            "context": { "type": "object", "additionalProperties": true },
+            "context": {
+              "$ref": "agentflow.schema.project_index.common.v1#/$defs/selected_project_context"
+            },
             "write_permission": {
+              "description": "Prompt-level write intent carried into the role prompt. The runtime must not treat this field as a hard permission gate.",
               "enum": ["readonly", "artifact_write", "worktree_write"]
             },
             "provider_hint": { "type": "string" },

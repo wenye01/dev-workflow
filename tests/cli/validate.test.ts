@@ -34,4 +34,33 @@ describe('validate command', () => {
       schema_id: 'agentflow.schema.llm.evaluator_report.v1',
     });
   });
+
+  it('uses payload classification for explicit LLM schema failures', async () => {
+    const error = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
+    const fixturePath = path.join(
+      process.cwd(),
+      'fixtures',
+      'payloads',
+      'invalid-evaluator-report.json',
+    );
+
+    await createProgram().parseAsync([
+      'node',
+      'agentflow',
+      'validate',
+      fixturePath,
+      '--schema',
+      'agentflow.schema.llm.evaluator_report.v1',
+    ]);
+
+    expect(process.exitCode).toBe(2);
+    expect(JSON.parse(error.mock.calls[0]?.[0] ?? '{}')).toMatchObject({
+      error: {
+        classification: 'payload_schema_invalid',
+        schema_id: 'agentflow.schema.llm.evaluator_report.v1',
+      },
+    });
+  });
 });

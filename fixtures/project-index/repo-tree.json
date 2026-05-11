@@ -1,0 +1,35 @@
+{
+  "schema_version": "agentflow.project_index.repo_tree.v1",
+  "repo": "/fixture/repo",
+  "generated_at": "2026-05-11T00:00:00.000Z",
+  "entries": [
+    {
+      "path": "src",
+      "kind": "directory",
+      "size_bytes": 0
+    },
+    {
+      "path": "src/auth/service.ts",
+      "kind": "file",
+      "size_bytes": 2048,
+      "mtime": "2026-05-11T00:00:00.000Z",
+      "content_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "language": "TypeScript"
+    },
+    {
+      "path": "tests/auth/service.test.ts",
+      "kind": "file",
+      "size_bytes": 1024,
+      "mtime": "2026-05-11T00:00:00.000Z",
+      "content_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "language": "TypeScript"
+    }
+  ],
+  "skipped": [
+    {
+      "path": "node_modules",
+      "reason": "dependency",
+      "detail": "Dependency directory."
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "schema_version": "agentflow.project_index.document_index.v1",
+  "repo": "/fixture/repo",
+  "generated_at": "2026-05-11T00:00:00.000Z",
+  "documents": [
+    {
+      "doc_id": "readme",
+      "path": "README.md",
+      "title": "Fixture README",
+      "kind": "readme",
+      "content_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "mtime": "2026-05-11T00:00:00.000Z",
+      "sections": [
+        {
+          "title": "Usage",
+          "anchor": "usage",
+          "line_start": 1,
+          "line_end": 12
+        }
+      ],
+      "summary_ref": ".agentflow/project-index/documents/summaries/readme.json",
+      "related_modules": ["auth"]
+    }
+  ]
+}

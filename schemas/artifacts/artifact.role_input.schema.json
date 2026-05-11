@@ -28,7 +28,9 @@
               "type": "object",
               "additionalProperties": true
             },
-            "context": { "type": "object", "additionalProperties": true },
+            "context": {
+              "$ref": "agentflow.schema.project_index.common.v1#/$defs/selected_project_context"
+            },
             "constraints": {
               "type": "object",
               "required": [
@@ -40,6 +42,7 @@
               "additionalProperties": true,
               "properties": {
                 "write_permission": {
+                  "description": "Prompt-level behavior guidance included in role constraints. It is not enforced as runtime access control.",
                   "enum": ["readonly", "artifact_write", "worktree_write"]
                 },
                 "allowed_paths": {

@@ -21,7 +21,7 @@
   "execution_plan": [["generator.implementer"]],
   "aggregation": {
     "strategy": "validate_and_merge",
-    "required_checks": ["schema", "scope_check"]
+    "required_checks": ["schema", "scope_review"]
   },
   "rationale": "A single implementer is enough for the fixture task."
 }

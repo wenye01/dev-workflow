@@ -4,6 +4,7 @@ export type SchemaValidationClassification =
   | 'invalid_json'
   | 'schema_not_found'
   | 'payload_schema_invalid'
+  | 'project_index_schema_invalid'
   | 'canonical_schema_invalid';
 
 export interface NormalizedSchemaError {
