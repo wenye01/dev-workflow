@@ -73,6 +73,8 @@ export function registerRunCommand(program: Command): void {
                     planner_package: plannerResult.plannerPackageRef,
                     batch_schedule: plannerResult.batchScheduleRef,
                     acceptance_contract: plannerResult.acceptanceContractRef,
+                    run_state: plannerResult.runStateRef,
+                    unit_state: plannerResult.unitStateRef,
                   },
                   unit: {
                     unit_id: plannerResult.unitId,

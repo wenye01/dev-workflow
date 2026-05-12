@@ -70,6 +70,13 @@ export interface WriteProgramArtifactOptions {
   readonly renderMarkdown?: boolean;
 }
 
+export interface WriteStateArtifactOptions {
+  readonly artifactType: 'run_state' | 'unit_state';
+  readonly ref: ArtifactRef;
+  readonly state: Record<string, unknown>;
+  readonly metadata: ArtifactMetadataInput;
+}
+
 export interface ArtifactWriteResult {
   readonly artifact: CanonicalArtifact;
   readonly ref: ArtifactRef;
@@ -132,6 +139,45 @@ export class ArtifactStore {
       options.ref,
       options.renderMarkdown ?? false,
     );
+  }
+
+  async writeStateArtifact(
+    options: WriteStateArtifactOptions,
+  ): Promise<{
+    readonly ref: ArtifactRef;
+    readonly state: Record<string, unknown>;
+    readonly index: ArtifactIndex;
+  }> {
+    this.registry.assertCanonicalArtifact(options.artifactType, options.state);
+
+    const json = `${JSON.stringify(options.state, null, 2)}\n`;
+    const artifactPathOnDisk = resolveArtifactRef(this.runRoot, options.ref);
+    await mkdir(path.dirname(artifactPathOnDisk), { recursive: true });
+    await writeFile(artifactPathOnDisk, json, 'utf8');
+
+    const entry = await this.buildIndexEntryFromFields({
+      ref: options.ref,
+      artifactType: options.artifactType,
+      schemaVersion: schemaVersionFromState(options.state),
+      artifactId:
+        options.metadata.artifactId ??
+        defaultArtifactId(options.artifactType, options.ref),
+      runId: options.metadata.runId,
+      batchId: options.metadata.batchId,
+      unitId: options.metadata.unitId,
+      attempt: options.metadata.attempt,
+      fixRound: options.metadata.fixRound,
+      producer: options.metadata.producer,
+      createdAt: options.metadata.createdAt ?? new Date().toISOString(),
+      commitRefs: options.metadata.commitRefs ?? [],
+    });
+    const index = await this.upsertIndex(entry);
+
+    return {
+      ref: options.ref,
+      state: options.state,
+      index,
+    };
   }
 
   async writeStopReportForSchemaFailure(
@@ -225,28 +271,60 @@ export class ArtifactStore {
     ref: ArtifactRef,
     markdownRef?: ArtifactRef,
   ): Promise<ArtifactIndexEntry> {
-    const artifactPathOnDisk = resolveArtifactRef(this.runRoot, ref);
+    return await this.buildIndexEntryFromFields({
+      ref,
+      artifactType: artifact.artifact_type,
+      schemaVersion: artifact.schema_version,
+      artifactId: artifact.artifact_id,
+      runId: artifact.run_id,
+      batchId: artifact.batch_id,
+      unitId: artifact.unit_id,
+      attempt: artifact.attempt,
+      fixRound: artifact.fix_round,
+      producer: artifact.producer,
+      createdAt: artifact.created_at,
+      markdownRef,
+      commitRefs: artifact.commit_refs,
+    });
+  }
+
+  private async buildIndexEntryFromFields(options: {
+    readonly ref: ArtifactRef;
+    readonly artifactType: ArtifactType;
+    readonly schemaVersion: string;
+    readonly artifactId: string;
+    readonly runId: string;
+    readonly batchId?: string;
+    readonly unitId?: string;
+    readonly attempt?: number;
+    readonly fixRound?: number;
+    readonly producer: ArtifactProducer;
+    readonly createdAt: string;
+    readonly markdownRef?: ArtifactRef;
+    readonly commitRefs: readonly CommitRef[];
+  }): Promise<ArtifactIndexEntry> {
+    const artifactPathOnDisk = resolveArtifactRef(this.runRoot, options.ref);
     const [content, stats] = await Promise.all([
       readFile(artifactPathOnDisk),
       stat(artifactPathOnDisk),
     ]);
 
     return pruneUndefined({
-      ref,
-      artifact_type: artifact.artifact_type,
-      schema_version: artifact.schema_version,
-      artifact_id: artifact.artifact_id,
-      run_id: artifact.run_id,
-      batch_id: artifact.batch_id,
-      unit_id: artifact.unit_id,
-      attempt: artifact.attempt,
-      fix_round: artifact.fix_round,
-      producer: artifact.producer,
-      created_at: artifact.created_at,
+      ref: options.ref,
+      artifact_type: options.artifactType,
+      schema_version: options.schemaVersion,
+      artifact_id: options.artifactId,
+      run_id: options.runId,
+      batch_id: options.batchId,
+      unit_id: options.unitId,
+      attempt: options.attempt,
+      fix_round: options.fixRound,
+      producer: options.producer,
+      created_at: options.createdAt,
       content_sha256: createHash('sha256').update(content).digest('hex'),
       size_bytes: stats.size,
-      markdown_ref: markdownRef,
-      commit_refs: artifact.commit_refs,
+      markdown_ref: options.markdownRef,
+      commit_refs: options.commitRefs,
     }) as unknown as ArtifactIndexEntry;
   }
 
@@ -338,6 +416,18 @@ function normalizeSchemaFailure(error: unknown): SchemaValidationError {
   return new SchemaValidationError({
     classification: 'canonical_schema_invalid',
     message: error instanceof Error ? error.message : String(error),
+  });
+}
+
+function schemaVersionFromState(state: Record<string, unknown>): string {
+  const schemaVersion = state.schema_version;
+  if (typeof schemaVersion === 'string' && schemaVersion.length > 0) {
+    return schemaVersion;
+  }
+
+  throw new SchemaValidationError({
+    classification: 'canonical_schema_invalid',
+    message: 'State artifact is missing schema_version.',
   });
 }
 

@@ -153,6 +153,8 @@ async function expectPlannerArtifacts(repo: string): Promise<void> {
     '.agentflow/planner/package.json',
     '.agentflow/planner/batch-schedule.json',
     '.agentflow/units/auth-refresh/contract.json',
+    '.agentflow/run.json',
+    '.agentflow/units/auth-refresh/state.json',
   ];
 
   for (const ref of refs) {
@@ -185,6 +187,16 @@ async function expectPlannerArtifacts(repo: string): Promise<void> {
     'acceptance_contract',
     await readJson(
       path.join(repo, '.agentflow', 'units', 'auth-refresh', 'contract.json'),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'run_state',
+    await readJson(path.join(repo, '.agentflow', 'run.json')),
+  );
+  registry.assertCanonicalArtifact(
+    'unit_state',
+    await readJson(
+      path.join(repo, '.agentflow', 'units', 'auth-refresh', 'state.json'),
     ),
   );
 }

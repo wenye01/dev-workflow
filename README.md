@@ -20,8 +20,8 @@ agentflow doctor --config <file>
 `agentflow run` currently initializes through the Milestone 8 Planner pipeline:
 it builds or reuses Project Index artifacts, writes selected context, source
 slices, Planner/Generator/Evaluator role inputs, and now materializes the
-Planner Package, Acceptance Contract, and Batch Schedule. Generator runtime is
-not implemented yet.
+Planner Package, Acceptance Contract, Batch Schedule, run state, and unit
+state. Generator runtime is not implemented yet.
 
 ## Development
 

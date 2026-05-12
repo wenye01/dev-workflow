@@ -6,10 +6,13 @@ import {
   plannerBatchSchedulePath,
   plannerPath,
   resolveArtifactRef,
+  runStatePath,
   unitContractPath,
+  unitStatePath,
+  worktreePath,
 } from '../artifacts/paths.js';
 import type { ArtifactRef, UnitId } from '../core/types.js';
-import { asUnitId } from '../core/types.js';
+import { asRunId, asUnitId } from '../core/types.js';
 import type { ContextBuilderResult } from '../context/context-builder.js';
 import { SchemaRegistry } from '../schemas/registry.js';
 import { parseJsonObject } from '../schemas/validator.js';
@@ -22,6 +25,8 @@ export interface PlannerPipelineOptions {
 }
 
 export interface PlannerPipelineResult {
+  readonly runStateRef: ArtifactRef;
+  readonly unitStateRef: ArtifactRef;
   readonly routingDecisionRef: ArtifactRef;
   readonly roleRunRequestRefs: readonly ArtifactRef[];
   readonly plannerPackageRef: ArtifactRef;
@@ -83,6 +88,8 @@ export class PlannerPipeline {
     const plannerPackageRef = plannerPath('package.json');
     const batchScheduleRef = plannerBatchSchedulePath();
     const acceptanceContractRef = unitContractPath(unitId);
+    const runStateRef = runStatePath();
+    const unitStateRef = unitStatePath(unitId);
 
     const verificationCommand = await this.selectVerificationCommand(
       options.repoRoot,
@@ -246,7 +253,86 @@ export class PlannerPipeline {
       renderMarkdown: true,
     });
 
+    const createdAt = new Date().toISOString();
+    await store.writeStateArtifact({
+      artifactType: 'run_state',
+      ref: runStateRef,
+      state: {
+        schema_version: 'agentflow.run_state.v1',
+        run_id: options.runId,
+        status: 'running',
+        worktree_path: worktreePath(asRunId(options.runId)),
+        workspace_mode: 'git_worktree',
+        current_batch_id: batchId,
+        started_at: createdAt,
+        updated_at: createdAt,
+        last_stable_state: 'planner_ready',
+        resume_from: null,
+        config_snapshot_ref: null,
+        budgets: {
+          max_batches: 1,
+          max_units: 1,
+          max_fix_rounds: 1,
+          max_evaluator_retries: 1,
+        },
+        counters: {
+          cli_processes_started: 0,
+          commits_created: 0,
+          schema_failures: 0,
+          fix_loops: 0,
+        },
+        stop_reason: null,
+      },
+      metadata: {
+        runId: options.runId,
+        artifactId: `run-state-${options.runId}`,
+        producer: {
+          kind: 'system',
+        },
+        createdAt,
+      },
+    });
+
+    await store.writeStateArtifact({
+      artifactType: 'unit_state',
+      ref: unitStateRef,
+      state: {
+        schema_version: 'agentflow.unit_state.v1',
+        unit_id: unitId,
+        batch_id: batchId,
+        status: 'ready',
+        attempt: 0,
+        fix_round: 0,
+        dependencies: [],
+        artifacts: {
+          routing_decision: routingDecisionRef,
+          role_run_request: roleRunRequestRef,
+          planner_package: plannerPackageRef,
+          batch_schedule: batchScheduleRef,
+          acceptance_contract: acceptanceContractRef,
+        },
+        commits: [],
+        pending_transition: null,
+        locks: {
+          file_scope: selectedAllowedPaths(plannerSourceSlice).slice(0, 8),
+        },
+        updated_at: createdAt,
+      },
+      metadata: {
+        runId: options.runId,
+        unitId,
+        batchId,
+        artifactId: `unit-state-${unitId}`,
+        producer: {
+          kind: 'system',
+        },
+        createdAt,
+      },
+    });
+
     return {
+      runStateRef,
+      unitStateRef,
       routingDecisionRef,
       roleRunRequestRefs: [roleRunRequestRef],
       plannerPackageRef,
