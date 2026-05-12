@@ -29,20 +29,17 @@ export function registerProjectIndexCommand(program: Command): void {
       'Directory for generated project index artifacts',
       '.agentflow/project-index',
     )
-    .option('--config <file>', 'Agentflow config file')
     .option('--force', 'Rebuild even when the existing index appears fresh')
     .action(
       async (options: {
         readonly repo: string;
         readonly out: string;
-        readonly config?: string;
         readonly force?: boolean;
       }) => {
         try {
           const result = await new ProjectIndexBuilder().build({
             repoPath: options.repo,
             outDir: options.out,
-            configPath: options.config,
             force: options.force ?? false,
           });
 

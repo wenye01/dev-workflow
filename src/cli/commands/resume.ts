@@ -9,10 +9,7 @@ export function registerResumeCommand(program: Command): void {
     .requiredOption('--run-id <run_id>', 'Run id to resume')
     .requiredOption('--repo <path>', 'Git repository path')
     .action(
-      async (options: {
-        readonly runId: string;
-        readonly repo: string;
-      }) => {
+      async (options: { readonly runId: string; readonly repo: string }) => {
         try {
           const result = await new Finalizer().resume({
             repoPath: options.repo,
@@ -29,7 +26,8 @@ export function registerResumeCommand(program: Command): void {
               {
                 error: {
                   code: 'AGENTFLOW_RESUME_FAILED',
-                  message: error instanceof Error ? error.message : String(error),
+                  message:
+                    error instanceof Error ? error.message : String(error),
                 },
               },
               null,

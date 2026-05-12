@@ -134,10 +134,14 @@ export function registerToolCommand(program: Command): void {
   roleCatalog
     .command('list')
     .description('List role catalog entries.')
-    .requiredOption('--config <file>', 'Agentflow config file')
-    .action(async (options: { readonly config: string }) => {
+    .option(
+      '--repo <path>',
+      'Repository path for project settings',
+      process.cwd(),
+    )
+    .action(async (options: { readonly repo: string }) => {
       try {
-        const config = await loadAgentflowConfig(options.config);
+        const config = await loadAgentflowConfig({ repoPath: options.repo });
         const catalog = new RoleCatalog(config);
         console.log(
           JSON.stringify(
@@ -166,10 +170,14 @@ export function registerToolCommand(program: Command): void {
   provider
     .command('capabilities')
     .description('List provider capabilities derived from config.')
-    .requiredOption('--config <file>', 'Agentflow config file')
-    .action(async (options: { readonly config: string }) => {
+    .option(
+      '--repo <path>',
+      'Repository path for project settings',
+      process.cwd(),
+    )
+    .action(async (options: { readonly repo: string }) => {
       try {
-        const config = await loadAgentflowConfig(options.config);
+        const config = await loadAgentflowConfig({ repoPath: options.repo });
         const registry = new ProviderRegistry(config.providers);
         const providers = await Promise.all(
           registry.list().map(async (providerConfig) => {

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ArtifactRef } from '../core/types.js';
+import { loadAgentflowConfig } from '../config/config-loader.js';
 import {
   PROJECT_INDEX_SCHEMA_IDS,
   SchemaRegistry,
@@ -65,7 +66,14 @@ export class ProjectIndexBuilder {
       repoInfo.repoRoot,
       options.outDir ?? '.agentflow/project-index',
     );
-    const configHash = await hashOptionalFile(options.configPath);
+    const configHash =
+      options.configPath !== undefined
+        ? await hashOptionalFile(options.configPath)
+        : sha256Buffer(
+            JSON.stringify(
+              (await loadAgentflowConfig({ repoPath: repoInfo.repoRoot })).raw,
+            ),
+          );
     const scan = await scanRepository(repoInfo.repoRoot);
 
     if (!options.force) {

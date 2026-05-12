@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { parse as parseYaml } from 'yaml';
@@ -65,6 +66,7 @@ export interface RoleConfig {
 
 export interface AgentflowConfig {
   readonly filePath: string;
+  readonly sources: readonly string[];
   readonly providers: Readonly<Record<string, ProviderConfig>>;
   readonly roles: Readonly<Record<string, RoleConfig>>;
   readonly raw: Readonly<Record<string, unknown>>;
@@ -88,14 +90,66 @@ export class ConfigError extends Error {
   }
 }
 
-export async function loadAgentflowConfig(
-  configPath: string,
-): Promise<AgentflowConfig> {
-  const resolvedPath = path.resolve(configPath);
-  const rawText = await readFile(resolvedPath, 'utf8');
-  const parsed = parseConfigDocument(rawText, resolvedPath);
+export const PROJECT_CONFIG_PATH = path.join('.agentflow', 'settings.json');
+export const LEGACY_PROJECT_CONFIG_FILE = 'agentflow.config.yaml';
+export const GLOBAL_CONFIG_PATH = path.join(
+  os.homedir(),
+  '.agentflow',
+  'settings.json',
+);
 
-  return normalizeConfig(parsed, resolvedPath);
+export interface LoadAgentflowConfigOptions {
+  readonly configPath?: string;
+  readonly repoPath?: string;
+  readonly cwd?: string;
+  readonly globalConfigPath?: string | false;
+}
+
+const DEFAULT_CONFIG: Readonly<Record<string, unknown>> = {
+  providers: {
+    codex: {
+      type: 'codex',
+      command: 'codex',
+    },
+  },
+  roles: {
+    'planner.router': {
+      provider_candidates: [{ provider: 'codex' }],
+    },
+    'generator.implementer': {
+      module: 'generator',
+      write_permission: 'worktree_write',
+      provider_candidates: [{ provider: 'codex' }],
+    },
+    'evaluator.contract_checker': {
+      module: 'evaluator',
+      write_permission: 'readonly',
+      provider_candidates: [{ provider: 'codex' }],
+    },
+  },
+};
+
+export async function loadAgentflowConfig(
+  options: string | LoadAgentflowConfigOptions = {},
+): Promise<AgentflowConfig> {
+  const resolvedOptions =
+    typeof options === 'string' ? { configPath: options } : options;
+  const sources = await resolveConfigSources(resolvedOptions);
+  const parsedSources = await Promise.all(
+    sources.map(async (sourcePath) =>
+      parseConfigDocument(await readFile(sourcePath, 'utf8'), sourcePath),
+    ),
+  );
+  const merged = parsedSources.reduce(
+    (current, source) => mergeConfigRecords(current, source),
+    DEFAULT_CONFIG,
+  );
+
+  return normalizeConfig(
+    merged,
+    sources.length > 0 ? sources.join(path.delimiter) : '<defaults>',
+    sources,
+  );
 }
 
 export function parseConfigDocument(
@@ -138,13 +192,78 @@ export function parseConfigDocument(
 export function normalizeConfig(
   raw: Readonly<Record<string, unknown>>,
   filePath = '<config>',
+  sources: readonly string[] = filePath === '<config>' ? [] : [filePath],
 ): AgentflowConfig {
   return {
     filePath,
+    sources,
     providers: normalizeProviders(readRecord(raw, 'providers') ?? {}),
     roles: normalizeRoles(readRecord(raw, 'roles') ?? {}),
     raw,
   };
+}
+
+export async function resolveConfigSources(
+  options: LoadAgentflowConfigOptions = {},
+): Promise<readonly string[]> {
+  if (options.configPath) {
+    return [path.resolve(options.cwd ?? process.cwd(), options.configPath)];
+  }
+
+  const repoRoot = path.resolve(
+    options.cwd ?? process.cwd(),
+    options.repoPath ?? '.',
+  );
+  const candidates = [
+    options.globalConfigPath === false
+      ? undefined
+      : (options.globalConfigPath ?? GLOBAL_CONFIG_PATH),
+    path.join(repoRoot, LEGACY_PROJECT_CONFIG_FILE),
+    path.join(repoRoot, PROJECT_CONFIG_PATH),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  const existing = await Promise.all(
+    candidates.map(async (candidate) =>
+      (await pathExists(candidate)) ? candidate : undefined,
+    ),
+  );
+
+  return existing.filter((candidate): candidate is string =>
+    Boolean(candidate),
+  );
+}
+
+function mergeConfigRecords(
+  base: Readonly<Record<string, unknown>>,
+  override: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const entries = new Map<string, unknown>(Object.entries(base));
+
+  for (const [key, value] of Object.entries(override)) {
+    const previous = entries.get(key);
+    entries.set(
+      key,
+      isPlainRecord(previous) && isPlainRecord(value)
+        ? mergeConfigRecords(previous, value)
+        : value,
+    );
+  }
+
+  return Object.fromEntries(entries);
+}
+
+function isPlainRecord(
+  value: unknown,
+): value is Readonly<Record<string, unknown>> {
+  return isRecord(value) && !Array.isArray(value);
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function normalizeProviders(

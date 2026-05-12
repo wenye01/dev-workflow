@@ -9,13 +9,18 @@ TypeScript library API.
 
 ```bash
 agentflow --help
-agentflow run --repo <path> --task <file> --config <file>
-agentflow project-index build --repo <path> [--out <path>] [--config <file>] [--force]
+agentflow run --repo <path> --task <file>
+agentflow project-index build --repo <path> [--out <path>] [--force]
 agentflow project-index show --index-dir <path> --name <manifest|overview|documents|commands|modules|tree>
 agentflow resume --run-id <run_id> --repo <path>
 agentflow validate <artifact>
-agentflow doctor --config <file>
+agentflow doctor [--repo <path>]
 ```
+
+Configuration is loaded from built-in defaults, then
+`~/.agentflow/settings.json`, then the project-local
+`.agentflow/settings.json`. Project settings override global settings. Default
+settings are not written to disk.
 
 `agentflow run` currently initializes through the Milestone 8 Planner pipeline:
 it builds or reuses Project Index artifacts, writes selected context, source

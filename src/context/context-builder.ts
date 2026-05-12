@@ -53,7 +53,7 @@ type RoleKey = 'planner' | 'generator' | 'evaluator';
 export interface ContextBuilderOptions {
   readonly repoPath: string;
   readonly taskPath: string;
-  readonly configPath: string;
+  readonly configPath?: string;
   readonly runId?: string;
   readonly projectIndexDir?: string;
   readonly forceProjectIndex?: boolean;

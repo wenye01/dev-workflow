@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -13,7 +13,7 @@ describe('provider and role catalog tools', () => {
   });
 
   it('lists role catalog provider candidates as JSON', async () => {
-    const configPath = await writeConfig();
+    const repo = await writeConfig();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await createProgram().parseAsync([
@@ -22,26 +22,26 @@ describe('provider and role catalog tools', () => {
       'tool',
       'role-catalog',
       'list',
-      '--config',
-      configPath,
+      '--repo',
+      repo,
     ]);
 
     expect(process.exitCode).toBeUndefined();
     expect(JSON.parse(log.mock.calls[0]?.[0] ?? '{}')).toMatchObject({
-      roles: [
-        {
+      roles: expect.arrayContaining([
+        expect.objectContaining({
           name: 'planner.router',
           provider_candidates: [
             { provider: 'mock-primary', model: 'mock-plan' },
             { provider: 'mock-fallback', model: 'mock-fallback' },
           ],
-        },
-      ],
+        }),
+      ]),
     });
   });
 
   it('lists provider capabilities derived from config', async () => {
-    const configPath = await writeConfig();
+    const repo = await writeConfig();
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 
     await createProgram().parseAsync([
@@ -50,8 +50,8 @@ describe('provider and role catalog tools', () => {
       'tool',
       'provider',
       'capabilities',
-      '--config',
-      configPath,
+      '--repo',
+      repo,
     ]);
 
     expect(process.exitCode).toBeUndefined();
@@ -73,28 +73,36 @@ describe('provider and role catalog tools', () => {
 
 async function writeConfig(): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), 'agentflow-config-'));
-  const configPath = path.join(dir, 'agentflow.config.yaml');
+  const configPath = path.join(dir, '.agentflow', 'settings.json');
+  await mkdir(path.dirname(configPath), { recursive: true });
   await writeFile(
     configPath,
-    [
-      'providers:',
-      '  mock-primary:',
-      '    type: mock',
-      '    model: mock-plan',
-      '  mock-fallback:',
-      '    type: mock',
-      '    model: mock-fallback',
-      'roles:',
-      '  planner.router:',
-      '    module: planner',
-      '    provider_candidates:',
-      '      - provider: mock-primary',
-      '        model: mock-plan',
-      '      - provider: mock-fallback',
-      '        model: mock-fallback',
-      '',
-    ].join('\n'),
+    `${JSON.stringify(
+      {
+        providers: {
+          'mock-primary': {
+            type: 'mock',
+            model: 'mock-plan',
+          },
+          'mock-fallback': {
+            type: 'mock',
+            model: 'mock-fallback',
+          },
+        },
+        roles: {
+          'planner.router': {
+            module: 'planner',
+            provider_candidates: [
+              { provider: 'mock-primary', model: 'mock-plan' },
+              { provider: 'mock-fallback', model: 'mock-fallback' },
+            ],
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`,
     'utf8',
   );
-  return configPath;
+  return dir;
 }

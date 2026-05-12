@@ -24,12 +24,11 @@ describe('agentflow CLI', () => {
       run?.options
         .filter((option) => option.mandatory)
         .map((option) => option.long),
-    ).toEqual(['--repo', '--task', '--config']);
+    ).toEqual(['--repo', '--task']);
     expect(run?.options.map((option) => option.long)).toEqual(
       expect.arrayContaining([
         '--repo',
         '--task',
-        '--config',
         '--project-index-dir',
         '--force-project-index',
         '--run-id',

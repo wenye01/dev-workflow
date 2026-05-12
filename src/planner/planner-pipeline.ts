@@ -75,7 +75,9 @@ export class PlannerPipeline {
           options.context.outputs.sourceSlices[0],
         )
       : {};
-    const plannerSourceSlice = extractArtifactPayload(plannerSourceSliceArtifact);
+    const plannerSourceSlice = extractArtifactPayload(
+      plannerSourceSliceArtifact,
+    );
 
     const unitId = asUnitId('auth-refresh');
     const batchId = 'batch-001';
@@ -368,8 +370,7 @@ export class PlannerPipeline {
         ): command is Record<string, unknown> & {
           readonly kind: 'test';
           readonly command: string;
-        } =>
-          command.kind === 'test' && typeof command.command === 'string',
+        } => command.kind === 'test' && typeof command.command === 'string',
       );
       if (testCommand?.command) {
         return testCommand.command;
@@ -412,7 +413,11 @@ function buildRouterDispatchPayload(options: {
     execution_plan: [['planner.initial']],
     aggregation: {
       strategy: 'validate_and_merge',
-      required_checks: ['schema', 'single_unit', 'acceptance_contract_completeness'],
+      required_checks: [
+        'schema',
+        'single_unit',
+        'acceptance_contract_completeness',
+      ],
     },
     rationale:
       'Planner can be reduced to a single planning role for MVP-0 and must emit one unit, one batch, and one contract.',
@@ -527,7 +532,9 @@ function buildPlannerPackagePayload(options: {
   };
 }
 
-function selectedAllowedPaths(sourceSlice: Record<string, unknown>): readonly string[] {
+function selectedAllowedPaths(
+  sourceSlice: Record<string, unknown>,
+): readonly string[] {
   const files = Array.isArray(sourceSlice.files)
     ? (sourceSlice.files as readonly Record<string, unknown>[])
     : [];
@@ -565,7 +572,8 @@ function summarizeGoal(taskText: string): string {
     .map((line) => line.trim())
     .filter(Boolean);
   const firstContentLine =
-    lines.find((line) => !/^#{1,6}\s+/.test(line)) ?? 'Implement the requested change.';
+    lines.find((line) => !/^#{1,6}\s+/.test(line)) ??
+    'Implement the requested change.';
   return stripMarkdownPrefix(firstContentLine);
 }
 
@@ -618,7 +626,10 @@ function normalizeSectionName(value: string): string {
 }
 
 function stripMarkdownPrefix(value: string): string {
-  return value.replace(/^#+\s*/, '').replace(/^[*-]\s*/, '').trim();
+  return value
+    .replace(/^#+\s*/, '')
+    .replace(/^[*-]\s*/, '')
+    .trim();
 }
 
 function stripBullet(value: string): string {
@@ -633,7 +644,9 @@ async function readJsonArtifact(
   repoRoot: string,
   ref: ArtifactRef,
 ): Promise<Record<string, unknown>> {
-  return parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  return parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
 }
 
 function extractArtifactPayload(

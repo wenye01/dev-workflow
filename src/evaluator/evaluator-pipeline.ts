@@ -4,7 +4,10 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { AdapterManager, AdapterSelectionError } from '../adapters/adapter-manager.js';
+import {
+  AdapterManager,
+  AdapterSelectionError,
+} from '../adapters/adapter-manager.js';
 import { ArtifactStore } from '../artifacts/artifact-store.js';
 import {
   artifactPath,
@@ -30,7 +33,7 @@ const execFileAsync = promisify(execFile);
 export interface EvaluatorPipelineOptions {
   readonly repoRoot: string;
   readonly runId: string;
-  readonly configPath: string;
+  readonly configPath?: string;
   readonly context: ContextBuilderResult;
   readonly planner: PlannerPipelineResult;
   readonly generator: GeneratorPipelineResult;
@@ -78,7 +81,9 @@ export class EvaluatorPipeline {
     private readonly decisionEngine = new DecisionEngine(),
   ) {}
 
-  async build(options: EvaluatorPipelineOptions): Promise<EvaluatorPipelineResult> {
+  async build(
+    options: EvaluatorPipelineOptions,
+  ): Promise<EvaluatorPipelineResult> {
     const unitId = options.planner.unitId;
     const attempt = options.attempt ?? 0;
     const maxEvaluatorRetries = options.maxEvaluatorRetries ?? 1;
@@ -88,16 +93,25 @@ export class EvaluatorPipeline {
       options.context.outputs.selectedProjectContext,
     );
     const acceptanceContract = extractArtifactPayload(
-      await readJsonArtifact(options.repoRoot, options.planner.acceptanceContractRef),
+      await readJsonArtifact(
+        options.repoRoot,
+        options.planner.acceptanceContractRef,
+      ),
     );
     const changePackage = extractArtifactPayload(
-      await readJsonArtifact(options.repoRoot, options.generator.changePackageRef),
+      await readJsonArtifact(
+        options.repoRoot,
+        options.generator.changePackageRef,
+      ),
     );
     const verificationResults = await runVerificationCommands(
       options.repoRoot,
       acceptanceContract,
     );
-    const diffSummary = await gitDiffSummary(options.repoRoot, options.generator.commitRef);
+    const diffSummary = await gitDiffSummary(
+      options.repoRoot,
+      options.generator.commitRef,
+    );
     const changedFiles = arrayOrDefault(changePackage.changed_files, []);
     const fileSnapshots = await readFileSnapshots(
       options.repoRoot,
@@ -115,12 +129,18 @@ export class EvaluatorPipeline {
       unitId,
       `evaluator-request.${attempt}.json`,
     );
-    const roleInputRef = unitRolePath(unitId, `evaluator-input.${attempt}.json`);
+    const roleInputRef = unitRolePath(
+      unitId,
+      `evaluator-input.${attempt}.json`,
+    );
     const rawRoleOutputRef = unitRolePath(
       unitId,
       `evaluator-output.raw.${attempt}.json`,
     );
-    const roleOutputRef = unitRolePath(unitId, `evaluator-output.${attempt}.json`);
+    const roleOutputRef = unitRolePath(
+      unitId,
+      `evaluator-output.${attempt}.json`,
+    );
     const evaluatorReportRef = unitEvaluatorReportPath(unitId, attempt);
     const unitDecisionRef = unitDecisionPath(unitId, attempt);
     const unitStateRef = unitStatePath(unitId);
@@ -136,7 +156,9 @@ export class EvaluatorPipeline {
         changed_files: changedFiles,
         file_snapshots: fileSnapshots,
         diff_summary: diffSummary,
-        commit_refs: options.generator.commitRef ? [options.generator.commitRef] : [],
+        commit_refs: options.generator.commitRef
+          ? [options.generator.commitRef]
+          : [],
         verification_results: verificationResults,
         risk_focus: arrayOrDefault(changePackage.recommended_evaluator_focus, [
           'acceptance contract',
@@ -151,7 +173,9 @@ export class EvaluatorPipeline {
           options.planner.acceptanceContractRef,
           options.context.outputs.selectedProjectContext,
         ],
-        commitRefs: options.generator.commitRef ? [options.generator.commitRef] : [],
+        commitRefs: options.generator.commitRef
+          ? [options.generator.commitRef]
+          : [],
       }),
       renderMarkdown: true,
     });
@@ -173,7 +197,9 @@ export class EvaluatorPipeline {
       request_id: `${options.runId}-${unitId}-evaluator-${attempt}`,
       role: 'evaluator.contract_checker',
       task: {
-        goal: stringField(acceptanceContract, 'objective') ?? 'Evaluate unit changes.',
+        goal:
+          stringField(acceptanceContract, 'objective') ??
+          'Evaluate unit changes.',
         scope: changedFilePaths(changePackage),
         non_goals: ['Do not modify repository files.'],
       },
@@ -229,7 +255,8 @@ export class EvaluatorPipeline {
     if (agentResult.status !== 'completed' || !agentResult.outputArtifact) {
       throw new EvaluatorPipelineError({
         code: 'AGENTFLOW_EVALUATOR_ROLE_FAILED',
-        message: agentResult.error?.message ?? 'Evaluator role did not complete.',
+        message:
+          agentResult.error?.message ?? 'Evaluator role did not complete.',
         classification: 'evaluator_role_failed',
         details: agentResult,
       });
@@ -260,7 +287,9 @@ export class EvaluatorPipeline {
       changePackage,
       verificationResults,
       roleOutputPayload,
-      commitRefs: options.generator.commitRef ? [options.generator.commitRef] : [],
+      commitRefs: options.generator.commitRef
+        ? [options.generator.commitRef]
+        : [],
     });
     await store.writeFromPayload({
       payloadType: 'evaluator_report',
@@ -271,7 +300,9 @@ export class EvaluatorPipeline {
         artifactId: `evaluator-report-${unitId}-${attempt}`,
         role: 'evaluator.router',
         inputArtifacts: [evaluationInputRef, roleOutputRef],
-        commitRefs: options.generator.commitRef ? [options.generator.commitRef] : [],
+        commitRefs: options.generator.commitRef
+          ? [options.generator.commitRef]
+          : [],
       }),
       renderMarkdown: true,
     });
@@ -318,7 +349,9 @@ export class EvaluatorPipeline {
           change_package: options.generator.changePackageRef,
           acceptance_contract: options.planner.acceptanceContractRef,
         },
-        commits: options.generator.commitRef ? [options.generator.commitRef] : [],
+        commits: options.generator.commitRef
+          ? [options.generator.commitRef]
+          : [],
         pending_transition: null,
         locks: {
           file_scope: changedFilePaths(changePackage),
@@ -349,12 +382,15 @@ export class EvaluatorPipeline {
   private async runEvaluatorRole(options: {
     readonly repoRoot: string;
     readonly runId: string;
-    readonly configPath: string;
+    readonly configPath?: string;
     readonly attempt: number;
     readonly outputArtifact: ArtifactRef;
     readonly inputArtifacts: readonly ArtifactRef[];
   }) {
-    const config = await loadAgentflowConfig(options.configPath);
+    const config = await loadAgentflowConfig({
+      configPath: options.configPath,
+      repoPath: options.repoRoot,
+    });
     const manager = new AdapterManager(config, {
       checkCommandAvailability: false,
     });
@@ -433,7 +469,10 @@ function buildEvaluatorReportPayload(options: {
   const commandBlocked = options.verificationResults.some((result) =>
     ['blocked', 'timed_out'].includes(String(result.status)),
   );
-  const evidence = buildEvidence(options.verificationResults, options.commitRefs);
+  const evidence = buildEvidence(
+    options.verificationResults,
+    options.commitRefs,
+  );
   const evidenceRefs = evidence
     .map((item) => item.ref)
     .filter((ref): ref is string => typeof ref === 'string');
@@ -463,7 +502,12 @@ function buildEvaluatorReportPayload(options: {
       evidence,
       planGaps: ['Acceptance Contract has no criteria.'],
       failures: [
-        failure('failure-contract-gap', 'criterion-missing', 'contract_gap', false),
+        failure(
+          'failure-contract-gap',
+          'criterion-missing',
+          'contract_gap',
+          false,
+        ),
       ],
     });
   }
@@ -497,7 +541,12 @@ function buildEvaluatorReportPayload(options: {
       evidenceRefs,
       evidence,
       failures: [
-        failure('failure-tests', firstCriterionRef(criteria), 'test_failure', true),
+        failure(
+          'failure-tests',
+          firstCriterionRef(criteria),
+          'test_failure',
+          true,
+        ),
       ],
     });
   }
@@ -525,13 +574,18 @@ function reportPayload(options: {
   readonly environmentIssues?: readonly unknown[];
   readonly unsafeFindings?: readonly unknown[];
 }): Record<string, unknown> {
-  const pass = options.overall === 'pass' || options.overall === 'pass_with_risk';
+  const pass =
+    options.overall === 'pass' || options.overall === 'pass_with_risk';
   return {
     overall: options.overall,
     summary: options.summary,
     contract_completeness: {
-      status: options.planGaps && options.planGaps.length > 0 ? 'incomplete' : 'complete',
-      missing: options.planGaps && options.planGaps.length > 0 ? ['criteria'] : [],
+      status:
+        options.planGaps && options.planGaps.length > 0
+          ? 'incomplete'
+          : 'complete',
+      missing:
+        options.planGaps && options.planGaps.length > 0 ? ['criteria'] : [],
     },
     evidence_sufficiency: pass ? 'sufficient_for_pass' : 'sufficient_for_fail',
     criteria_results: options.criteria.map((criterion) => ({
@@ -663,9 +717,12 @@ async function runCommand(
     return {
       command: command.command,
       kind: normalizeVerificationKind(command.kind, command.command),
-      status: failed.killed || failed.signal === 'SIGTERM' ? 'timed_out' : 'failed',
+      status:
+        failed.killed || failed.signal === 'SIGTERM' ? 'timed_out' : 'failed',
       summary: `Command failed: ${command.command}`,
-      relevant_output: truncateOutput(`${failed.stdout ?? ''}\n${failed.stderr ?? ''}`),
+      relevant_output: truncateOutput(
+        `${failed.stdout ?? ''}\n${failed.stderr ?? ''}`,
+      ),
     };
   }
 }
@@ -694,7 +751,11 @@ function verificationCommands(
 }
 
 function normalizeVerificationKind(kind: string, command: string): string {
-  if (['test', 'lint', 'typecheck', 'build', 'e2e', 'security_scan'].includes(kind)) {
+  if (
+    ['test', 'lint', 'typecheck', 'build', 'e2e', 'security_scan'].includes(
+      kind,
+    )
+  ) {
     return kind;
   }
   if (/\btest\b|vitest|jest|mocha/.test(command)) {
@@ -725,8 +786,11 @@ async function readRoleOutputPayload(
   ref: ArtifactRef,
   registry: SchemaRegistry,
 ): Promise<Record<string, unknown>> {
-  const raw = parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
-  const payload = isRecord(raw) && raw.artifact_type === 'role_output' ? raw.payload : raw;
+  const raw = parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
+  const payload =
+    isRecord(raw) && raw.artifact_type === 'role_output' ? raw.payload : raw;
   registry.assertLlmPayload('role_output', payload);
   return payload as Record<string, unknown>;
 }
@@ -735,18 +799,24 @@ async function readJsonArtifact(
   repoRoot: string,
   ref: ArtifactRef,
 ): Promise<Record<string, unknown>> {
-  return parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  return parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
 }
 
 async function readContextPayload(
   repoRoot: string,
   ref: ArtifactRef,
 ): Promise<Record<string, unknown>> {
-  const value = parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  const value = parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
   return extractArtifactPayload(value);
 }
 
-function extractArtifactPayload(value: Record<string, unknown>): Record<string, unknown> {
+function extractArtifactPayload(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
   return isRecord(value.payload) ? value.payload : value;
 }
 
@@ -837,7 +907,9 @@ function evaluatorMetadata(
   } as const;
 }
 
-function changedFilePaths(changePackage: Record<string, unknown>): readonly string[] {
+function changedFilePaths(
+  changePackage: Record<string, unknown>,
+): readonly string[] {
   const changedFiles = Array.isArray(changePackage.changed_files)
     ? changePackage.changed_files
     : [];
@@ -848,16 +920,24 @@ function changedFilePaths(changePackage: Record<string, unknown>): readonly stri
     .filter((value): value is string => Boolean(value));
 }
 
-function arrayOrDefault<T>(value: unknown, fallback: readonly T[]): readonly T[] {
+function arrayOrDefault<T>(
+  value: unknown,
+  fallback: readonly T[],
+): readonly T[] {
   return Array.isArray(value) ? (value as readonly T[]) : fallback;
 }
 
-function firstCriterionRef(criteria: readonly Record<string, unknown>[]): string {
+function firstCriterionRef(
+  criteria: readonly Record<string, unknown>[],
+): string {
   const first = criteria[0]?.ref;
   return typeof first === 'string' ? first : 'criterion-single-unit';
 }
 
-function stringField(value: Record<string, unknown>, key: string): string | undefined {
+function stringField(
+  value: Record<string, unknown>,
+  key: string,
+): string | undefined {
   const field = value[key];
   return typeof field === 'string' ? field : undefined;
 }
@@ -877,10 +957,14 @@ function unitStatusForDecision(decision: string): string {
 
 function truncateOutput(value: string): string {
   const trimmed = value.trim();
-  return trimmed.length > 4000 ? `${trimmed.slice(0, 4000)}\n[truncated]` : trimmed;
+  return trimmed.length > 4000
+    ? `${trimmed.slice(0, 4000)}\n[truncated]`
+    : trimmed;
 }
 
-function pruneUndefined(value: Record<string, unknown>): Record<string, unknown> {
+function pruneUndefined(
+  value: Record<string, unknown>,
+): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
   );

@@ -111,7 +111,7 @@ describe('Context Builder MVP', () => {
 
   it('wires agentflow run through Context Builder and completes the Planner pipeline', async () => {
     const repo = await makeTypeScriptRepo('cli-run');
-    const { taskPath, configPath } = await writeRunInputs(repo);
+    const { taskPath } = await writeRunInputs(repo);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     const error = vi
       .spyOn(console, 'error')
@@ -125,8 +125,6 @@ describe('Context Builder MVP', () => {
       repo,
       '--task',
       taskPath,
-      '--config',
-      configPath,
       '--run-id',
       'run-cli-context',
     ]);
@@ -152,7 +150,10 @@ describe('Context Builder MVP', () => {
       },
     });
     await expect(
-      readFile(path.join(repo, output.outputs?.final_or_stop_report ?? ''), 'utf8'),
+      readFile(
+        path.join(repo, output.outputs?.final_or_stop_report ?? ''),
+        'utf8',
+      ),
     ).resolves.toBeTypeOf('string');
 
     await expectPlannerArtifacts(repo);
@@ -186,7 +187,13 @@ async function expectPlannerArtifacts(repo: string): Promise<void> {
   registry.assertCanonicalArtifact(
     'role_run_request',
     await readJson(
-      path.join(repo, '.agentflow', 'routing', 'requests', '1-planner.initial.json'),
+      path.join(
+        repo,
+        '.agentflow',
+        'routing',
+        'requests',
+        '1-planner.initial.json',
+      ),
     ),
   );
   registry.assertCanonicalArtifact(
@@ -357,13 +364,7 @@ async function expectEvaluatorArtifacts(repo: string): Promise<void> {
   registry.assertCanonicalArtifact(
     'unit_decision',
     await readJson(
-      path.join(
-        repo,
-        '.agentflow',
-        'units',
-        'auth-refresh',
-        'decision.0.json',
-      ),
+      path.join(repo, '.agentflow', 'units', 'auth-refresh', 'decision.0.json'),
     ),
   );
 }
@@ -453,34 +454,35 @@ async function writeRunInputs(
   task = 'Implement auth refresh behavior in src/auth/index.ts and cover it with tests/auth/index.test.ts.',
 ): Promise<{ readonly taskPath: string; readonly configPath: string }> {
   const taskPath = path.join(repo, 'TASK.md');
-  const configPath = path.join(repo, 'agentflow.config.yaml');
+  const configPath = path.join(repo, '.agentflow', 'settings.json');
   await writeText(repo, 'TASK.md', `# Fixture Task\n\n${task}\n`);
-  await writeText(
-    repo,
-    'agentflow.config.yaml',
-    [
-      'providers:',
-      '  mock-generator:',
-      '    type: mock',
-      '    model: mock-generator',
-      '    mock_scenario: success_with_change',
-      '  mock-evaluator:',
-      '    type: mock',
-      '    model: mock-evaluator',
-      '    mock_scenario: success_no_change',
-      'roles:',
-      '  generator.implementer:',
-      '    provider_candidates:',
-      '      - provider: mock-generator',
-      '        model: mock-generator',
-      '  evaluator.contract_checker:',
-      '    provider_candidates:',
-      '      - provider: mock-evaluator',
-      '        model: mock-evaluator',
-      '',
-    ].join('\n'),
-  );
-  await git(repo, ['add', 'TASK.md', 'agentflow.config.yaml']);
+  await writeJson(repo, '.agentflow/settings.json', {
+    providers: {
+      'mock-generator': {
+        type: 'mock',
+        model: 'mock-generator',
+        mock_scenario: 'success_with_change',
+      },
+      'mock-evaluator': {
+        type: 'mock',
+        model: 'mock-evaluator',
+        mock_scenario: 'success_no_change',
+      },
+    },
+    roles: {
+      'generator.implementer': {
+        provider_candidates: [
+          { provider: 'mock-generator', model: 'mock-generator' },
+        ],
+      },
+      'evaluator.contract_checker': {
+        provider_candidates: [
+          { provider: 'mock-evaluator', model: 'mock-evaluator' },
+        ],
+      },
+    },
+  });
+  await git(repo, ['add', 'TASK.md', '.agentflow/settings.json']);
   await git(repo, ['commit', '-m', 'add run inputs']);
   return { taskPath, configPath };
 }

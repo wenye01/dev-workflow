@@ -18,7 +18,10 @@ const execFileAsync = promisify(execFile);
 
 describe('GeneratorPipeline', () => {
   it('writes generation input, role output, and a fresh Change Package', async () => {
-    const setup = await preparePlannedRun('generator-success', 'success_with_change');
+    const setup = await preparePlannedRun(
+      'generator-success',
+      'success_with_change',
+    );
     const result = await new GeneratorPipeline().build(setup.options);
     const registry = SchemaRegistry.load();
 
@@ -52,7 +55,10 @@ describe('GeneratorPipeline', () => {
   });
 
   it('supports fix mode and carries previous failures into generation input', async () => {
-    const setup = await preparePlannedRun('generator-fix', 'success_with_change');
+    const setup = await preparePlannedRun(
+      'generator-fix',
+      'success_with_change',
+    );
     const result = await new GeneratorPipeline().build({
       ...setup.options,
       mode: 'fix',
@@ -80,9 +86,14 @@ describe('GeneratorPipeline', () => {
   });
 
   it('stops when the generator reports no effective changes', async () => {
-    const setup = await preparePlannedRun('generator-no-change', 'success_no_change');
+    const setup = await preparePlannedRun(
+      'generator-no-change',
+      'success_no_change',
+    );
 
-    await expect(new GeneratorPipeline().build(setup.options)).rejects.toMatchObject({
+    await expect(
+      new GeneratorPipeline().build(setup.options),
+    ).rejects.toMatchObject({
       name: 'GeneratorPipelineError',
       code: 'AGENTFLOW_GENERATOR_NO_EFFECTIVE_CHANGE',
       classification: 'no_effective_change',

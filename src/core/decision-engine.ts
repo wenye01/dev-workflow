@@ -40,7 +40,11 @@ export class DecisionEngine {
     const failures = readFailures(report);
     const criteria = readCriteria(report);
     const evidenceRefs = readEvidenceRefs(report, failures, criteria);
-    const classification = primaryClassification(report, failures, input.unsafe);
+    const classification = primaryClassification(
+      report,
+      failures,
+      input.unsafe,
+    );
     const targetFailures = failures.map((failure) => String(failure.ref));
     const base = {
       evaluator_report: input.evaluatorReportRef,
@@ -51,7 +55,11 @@ export class DecisionEngine {
       max_fix_rounds: input.maxFixRounds,
     } as const;
 
-    if (input.unsafe || report.overall === 'unsafe' || classification === 'unsafe') {
+    if (
+      input.unsafe ||
+      report.overall === 'unsafe' ||
+      classification === 'unsafe'
+    ) {
       return {
         ...base,
         decision: 'stop',
@@ -222,7 +230,9 @@ function primaryClassification(
     return 'insufficient_evidence';
   }
 
-  const first = failures.find((failure) => typeof failure.classification === 'string');
+  const first = failures.find(
+    (failure) => typeof failure.classification === 'string',
+  );
   return isFailureClassification(first?.classification)
     ? first.classification
     : 'none';
@@ -235,7 +245,9 @@ function hasItems(value: unknown): boolean {
 function allMustCriteriaPassed(
   criteria: readonly Record<string, unknown>[],
 ): boolean {
-  const mustCriteria = criteria.filter((criterion) => criterion.severity === 'must');
+  const mustCriteria = criteria.filter(
+    (criterion) => criterion.severity === 'must',
+  );
   return (
     mustCriteria.length > 0 &&
     mustCriteria.every(
@@ -251,7 +263,10 @@ function isGeneratorFixable(
   classification: DecisionEngineResult['failure_classification'],
   failures: readonly Record<string, unknown>[],
 ): boolean {
-  if (classification !== 'implementation_failure' && classification !== 'test_failure') {
+  if (
+    classification !== 'implementation_failure' &&
+    classification !== 'test_failure'
+  ) {
     return false;
   }
   return failures.some((failure) => failure.auto_fixable === true);

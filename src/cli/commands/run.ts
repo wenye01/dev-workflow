@@ -29,7 +29,6 @@ export function registerRunCommand(program: Command): void {
     .description('Start a new agentflow run for one git repository.')
     .requiredOption('--repo <path>', 'Git repository path')
     .requiredOption('--task <file>', 'Task markdown file')
-    .requiredOption('--config <file>', 'Agentflow config file')
     .option(
       '--project-index-dir <path>',
       'Project Index directory under the repository',
@@ -44,7 +43,6 @@ export function registerRunCommand(program: Command): void {
       async (options: {
         readonly repo: string;
         readonly task: string;
-        readonly config: string;
         readonly projectIndexDir: string;
         readonly forceProjectIndex?: boolean;
         readonly runId?: string;
@@ -53,7 +51,6 @@ export function registerRunCommand(program: Command): void {
           const contextResult = await new ContextBuilder().build({
             repoPath: options.repo,
             taskPath: options.task,
-            configPath: options.config,
             projectIndexDir: options.projectIndexDir,
             forceProjectIndex: options.forceProjectIndex ?? false,
             runId: options.runId,
@@ -69,14 +66,12 @@ export function registerRunCommand(program: Command): void {
             const generatorResult = await new GeneratorPipeline().build({
               repoRoot: contextResult.repoRoot,
               runId: contextResult.runId,
-              configPath: options.config,
               context: contextResult,
               planner: plannerResult,
             });
             const evaluatorResult = await new EvaluatorPipeline().build({
               repoRoot: contextResult.repoRoot,
               runId: contextResult.runId,
-              configPath: options.config,
               context: contextResult,
               planner: plannerResult,
               generator: generatorResult,

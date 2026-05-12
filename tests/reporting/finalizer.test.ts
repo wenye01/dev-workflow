@@ -36,7 +36,10 @@ describe('Finalizer resume', () => {
     });
 
     const finalReport = JSON.parse(
-      await readFile(resolveArtifactRef(repoRoot, finalSummaryPath('json')), 'utf8'),
+      await readFile(
+        resolveArtifactRef(repoRoot, finalSummaryPath('json')),
+        'utf8',
+      ),
     ) as Record<string, unknown>;
     expect(finalReport).toMatchObject({
       artifact_type: 'final_report',
@@ -157,7 +160,11 @@ async function seedUnitDecision(
     payload: {
       decision,
       reason_code: decision === 'pass' ? 'passed' : 'unit_decision_stop',
-      evaluator_report: artifactPath('units', unitId, 'evaluator-report.0.json'),
+      evaluator_report: artifactPath(
+        'units',
+        unitId,
+        'evaluator-report.0.json',
+      ),
       target_failures: [],
       failure_classification: decision === 'pass' ? 'none' : 'unsafe',
       evidence_refs: [],

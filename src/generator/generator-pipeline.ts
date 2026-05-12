@@ -2,7 +2,10 @@ import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 
-import { AdapterManager, AdapterSelectionError } from '../adapters/adapter-manager.js';
+import {
+  AdapterManager,
+  AdapterSelectionError,
+} from '../adapters/adapter-manager.js';
 import { ArtifactStore } from '../artifacts/artifact-store.js';
 import {
   artifactPath,
@@ -27,7 +30,7 @@ type GeneratorMode = 'initial' | 'fix';
 export interface GeneratorPipelineOptions {
   readonly repoRoot: string;
   readonly runId: string;
-  readonly configPath: string;
+  readonly configPath?: string;
   readonly context: ContextBuilderResult;
   readonly planner: PlannerPipelineResult;
   readonly mode?: GeneratorMode;
@@ -71,12 +74,21 @@ export class GeneratorPipelineError extends Error {
 export class GeneratorPipeline {
   constructor(private readonly registry = SchemaRegistry.load()) {}
 
-  async build(options: GeneratorPipelineOptions): Promise<GeneratorPipelineResult> {
+  async build(
+    options: GeneratorPipelineOptions,
+  ): Promise<GeneratorPipelineResult> {
     const mode = options.mode ?? 'initial';
     const unitId = options.planner.unitId;
-    const unit = await this.readPlannerUnit(options.repoRoot, options.planner, unitId);
+    const unit = await this.readPlannerUnit(
+      options.repoRoot,
+      options.planner,
+      unitId,
+    );
     const acceptanceContract = extractArtifactPayload(
-      await readJsonArtifact(options.repoRoot, options.planner.acceptanceContractRef),
+      await readJsonArtifact(
+        options.repoRoot,
+        options.planner.acceptanceContractRef,
+      ),
     );
     const selectedProjectContext = await readContextPayload(
       options.repoRoot,
@@ -132,7 +144,12 @@ export class GeneratorPipeline {
       payloadType: 'router_dispatch',
       artifactType: 'routing_decision',
       ref: routingDecisionRef,
-      payload: buildGeneratorRoutePayload(mode, unit, constraints, previousFailures),
+      payload: buildGeneratorRoutePayload(
+        mode,
+        unit,
+        constraints,
+        previousFailures,
+      ),
       metadata: generatorMetadata(options, unitId, {
         artifactId: `generator-routing-${unitId}-${mode}`,
         role: 'generator.router',
@@ -145,7 +162,10 @@ export class GeneratorPipeline {
       request_id: `${options.runId}-${unitId}-generator-${mode}`,
       role: 'generator.implementer',
       task: {
-        goal: stringField(unit, 'goal') ?? stringField(unit, 'title') ?? 'Implement unit changes.',
+        goal:
+          stringField(unit, 'goal') ??
+          stringField(unit, 'title') ??
+          'Implement unit changes.',
         scope: constraints.allowed_paths,
         non_goals: [],
       },
@@ -198,7 +218,8 @@ export class GeneratorPipeline {
     if (agentResult.status !== 'completed' || !agentResult.outputArtifact) {
       throw new GeneratorPipelineError({
         code: 'AGENTFLOW_GENERATOR_ROLE_FAILED',
-        message: agentResult.error?.message ?? 'Generator role did not complete.',
+        message:
+          agentResult.error?.message ?? 'Generator role did not complete.',
         classification: 'generator_role_failed',
         details: agentResult,
       });
@@ -350,13 +371,16 @@ export class GeneratorPipeline {
   private async runGeneratorRole(options: {
     readonly repoRoot: string;
     readonly runId: string;
-    readonly configPath: string;
+    readonly configPath?: string;
     readonly mode: GeneratorMode;
     readonly outputArtifact: ArtifactRef;
     readonly inputArtifacts: readonly ArtifactRef[];
     readonly allowedPaths: readonly string[];
   }) {
-    const config = await loadAgentflowConfig(options.configPath);
+    const config = await loadAgentflowConfig({
+      configPath: options.configPath,
+      repoPath: options.repoRoot,
+    });
     const manager = new AdapterManager(config, {
       checkCommandAvailability: false,
     });
@@ -400,7 +424,10 @@ function buildGeneratorRoutePayload(
       {
         role: 'generator.implementer',
         task: {
-          goal: stringField(unit, 'goal') ?? stringField(unit, 'title') ?? 'Implement unit changes.',
+          goal:
+            stringField(unit, 'goal') ??
+            stringField(unit, 'title') ??
+            'Implement unit changes.',
           scope: constraints.allowed_paths,
           non_goals: [],
         },
@@ -412,7 +439,9 @@ function buildGeneratorRoutePayload(
             'acceptance-contract',
             ...(previousFailures.length > 0 ? ['previous-failures'] : []),
           ],
-          include_feedback: previousFailures.map((_, index) => `previous-failure-${index + 1}`),
+          include_feedback: previousFailures.map(
+            (_, index) => `previous-failure-${index + 1}`,
+          ),
         },
         write_permission: 'worktree_write',
       },
@@ -435,7 +464,9 @@ interface GeneratorConstraints {
   readonly max_writer_concurrency: 1;
 }
 
-function generatorConstraints(unit: Record<string, unknown>): GeneratorConstraints {
+function generatorConstraints(
+  unit: Record<string, unknown>,
+): GeneratorConstraints {
   const scope = isRecord(unit.scope) ? unit.scope : {};
   return {
     write_permission: 'worktree_write',
@@ -465,14 +496,22 @@ async function readRoleOutputPayload(
   ref: ArtifactRef,
   registry: SchemaRegistry,
 ): Promise<Record<string, unknown>> {
-  const raw = parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  const raw = parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
   const payload = isCanonicalRoleOutput(raw) ? raw.payload : raw;
   registry.assertLlmPayload('role_output', payload);
   return payload as Record<string, unknown>;
 }
 
-function isCanonicalRoleOutput(value: unknown): value is { readonly payload: unknown } {
-  return isRecord(value) && value.artifact_type === 'role_output' && 'payload' in value;
+function isCanonicalRoleOutput(
+  value: unknown,
+): value is { readonly payload: unknown } {
+  return (
+    isRecord(value) &&
+    value.artifact_type === 'role_output' &&
+    'payload' in value
+  );
 }
 
 function buildChangePackagePayload(options: {
@@ -516,7 +555,8 @@ function buildChangePackagePayload(options: {
         criterion: String(criterion.ref ?? 'criterion-generated'),
         status: 'not_checked',
         evidence: [],
-        notes: 'Generator defers authoritative acceptance judgment to Evaluator.',
+        notes:
+          'Generator defers authoritative acceptance judgment to Evaluator.',
       })),
     ),
     scope_notes: {
@@ -548,18 +588,25 @@ function auditGeneratorChanges(options: {
   const before = options.beforeStatus;
   const statusChanged = [...options.afterStatus.keys()].filter(
     (filePath) =>
-      !isAgentflowInternalPath(filePath) && before.get(filePath) !== options.afterStatus.get(filePath),
+      !isAgentflowInternalPath(filePath) &&
+      before.get(filePath) !== options.afterStatus.get(filePath),
   );
-  const roleChanged = readChangedFiles(options.roleOutputPayload).map((file) => file.path);
+  const roleChanged = readChangedFiles(options.roleOutputPayload).map(
+    (file) => file.path,
+  );
   const changedFiles = uniqueStrings([...statusChanged, ...roleChanged]).filter(
     (filePath) => !isAgentflowInternalPath(filePath),
   );
   const forbiddenFiles = changedFiles.filter((filePath) =>
-    options.forbiddenPaths.some((pattern) => pathMatchesPattern(filePath, pattern)),
+    options.forbiddenPaths.some((pattern) =>
+      pathMatchesPattern(filePath, pattern),
+    ),
   );
   const outOfScopeFiles = changedFiles.filter(
     (filePath) =>
-      !options.allowedPaths.some((pattern) => pathMatchesPattern(filePath, pattern)),
+      !options.allowedPaths.some((pattern) =>
+        pathMatchesPattern(filePath, pattern),
+      ),
   );
   const sensitiveFiles = changedFiles.filter(looksSensitivePath);
   const violations = [
@@ -594,7 +641,11 @@ async function commitGeneratorChanges(
     return undefined;
   }
 
-  await git(repoRoot, ['commit', '-m', `agentflow generator ${mode}: ${unitId}`]);
+  await git(repoRoot, [
+    'commit',
+    '-m',
+    `agentflow generator ${mode}: ${unitId}`,
+  ]);
   const [sha, subject, committedAt] = await Promise.all([
     git(repoRoot, ['rev-parse', 'HEAD']),
     git(repoRoot, ['log', '-1', '--pretty=%s']),
@@ -607,8 +658,14 @@ async function commitGeneratorChanges(
   };
 }
 
-async function gitStatus(repoRoot: string): Promise<ReadonlyMap<string, string>> {
-  const raw = await git(repoRoot, ['status', '--porcelain=v1', '--untracked-files=all']);
+async function gitStatus(
+  repoRoot: string,
+): Promise<ReadonlyMap<string, string>> {
+  const raw = await git(repoRoot, [
+    'status',
+    '--porcelain=v1',
+    '--untracked-files=all',
+  ]);
   const entries = new Map<string, string>();
   for (const line of raw.split('\n').filter(Boolean)) {
     entries.set(normalizeStatusPath(line.slice(3)), line.slice(0, 2));
@@ -625,17 +682,23 @@ async function readContextPayload(
   repoRoot: string,
   ref: ArtifactRef,
 ): Promise<Record<string, unknown>> {
-  return parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  return parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
 }
 
 async function readJsonArtifact(
   repoRoot: string,
   ref: ArtifactRef,
 ): Promise<Record<string, unknown>> {
-  return parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  return parseJsonObject(
+    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
+  );
 }
 
-function extractArtifactPayload(artifact: Record<string, unknown>): Record<string, unknown> {
+function extractArtifactPayload(
+  artifact: Record<string, unknown>,
+): Record<string, unknown> {
   const payload = artifact.payload;
   return isRecord(payload) ? payload : artifact;
 }
@@ -693,14 +756,22 @@ function arrayOrDefault<T>(value: unknown, fallback: readonly T[]): unknown {
   return Array.isArray(value) ? value : fallback;
 }
 
-function stringField(record: Record<string, unknown>, key: string): string | undefined {
+function stringField(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
   const value = record[key];
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function stringArray(value: unknown, fallback: readonly string[]): readonly string[] {
+function stringArray(
+  value: unknown,
+  fallback: readonly string[],
+): readonly string[] {
   return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+    ? value.filter(
+        (item): item is string => typeof item === 'string' && item.length > 0,
+      )
     : fallback;
 }
 

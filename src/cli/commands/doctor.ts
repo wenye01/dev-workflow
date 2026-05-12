@@ -16,15 +16,16 @@ export function registerDoctorCommand(program: Command): void {
   program
     .command('doctor')
     .description('Check local provider and configuration readiness.')
-    .requiredOption('--config <file>', 'Agentflow config file')
+    .option(
+      '--repo <path>',
+      'Repository path for project settings',
+      process.cwd(),
+    )
     .option('--smoke', 'Run provider command smoke tests')
     .action(
-      async (options: {
-        readonly config: string;
-        readonly smoke?: boolean;
-      }) => {
+      async (options: { readonly repo: string; readonly smoke?: boolean }) => {
         try {
-          const config = await loadAgentflowConfig(options.config);
+          const config = await loadAgentflowConfig({ repoPath: options.repo });
           const registry = new ProviderRegistry(config.providers);
           const providers = await Promise.all(
             registry.list().map((provider) =>

@@ -48,7 +48,7 @@ const ROUTER_OUTPUT_MAPPING: Readonly<
 
 export interface RouterRouteRunOptions {
   readonly runRoot: string;
-  readonly configPath: string;
+  readonly configPath?: string;
   readonly requestId: string;
   readonly role: string;
   readonly prompt: string;
@@ -69,7 +69,7 @@ export interface RouterRouteRunOptions {
 
 export interface RouterAggregateRunOptions {
   readonly runRoot: string;
-  readonly configPath: string;
+  readonly configPath?: string;
   readonly requestId: string;
   readonly role: string;
   readonly prompt: string;
@@ -224,7 +224,10 @@ export class RouterRunner {
       | RouterRouteRunOptions
       | (RouterAggregateRunOptions & { readonly outputArtifact: ArtifactRef }),
   ): Promise<Record<string, unknown>> {
-    const config = await loadAgentflowConfig(options.configPath);
+    const config = await loadAgentflowConfig({
+      configPath: options.configPath,
+      repoPath: options.runRoot,
+    });
     const adapterManager = new AdapterManager(config, {
       checkCommandAvailability: false,
     });

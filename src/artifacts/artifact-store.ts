@@ -141,9 +141,7 @@ export class ArtifactStore {
     );
   }
 
-  async writeStateArtifact(
-    options: WriteStateArtifactOptions,
-  ): Promise<{
+  async writeStateArtifact(options: WriteStateArtifactOptions): Promise<{
     readonly ref: ArtifactRef;
     readonly state: Record<string, unknown>;
     readonly index: ArtifactIndex;

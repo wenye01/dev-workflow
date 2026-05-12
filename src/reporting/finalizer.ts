@@ -85,7 +85,11 @@ export class Finalizer {
     }
 
     const artifactIndex = await readArtifactIndex(repoRoot, this.registry);
-    const existingFinal = latestRef(artifactIndex, options.runId, 'final_report');
+    const existingFinal = latestRef(
+      artifactIndex,
+      options.runId,
+      'final_report',
+    );
     if (existingFinal) {
       return {
         status: 'finalized',
@@ -113,12 +117,17 @@ export class Finalizer {
         runId: options.runId,
         reasonCode: 'pending_transition_in_run_state',
         classification: 'resume_integrity_failed',
-        message: 'Run state contains a pending transition that cannot be replayed safely.',
+        message:
+          'Run state contains a pending transition that cannot be replayed safely.',
         resumeFrom: String(runState.resume_from ?? 'pending_transition'),
       });
     }
 
-    const unitDecisionRef = latestRef(artifactIndex, options.runId, 'unit_decision');
+    const unitDecisionRef = latestRef(
+      artifactIndex,
+      options.runId,
+      'unit_decision',
+    );
     if (unitDecisionRef) {
       const decision = await readCanonicalPayload(repoRoot, unitDecisionRef);
       const decisionValue = String(decision.decision ?? '');
@@ -137,7 +146,11 @@ export class Finalizer {
           resume_from: null,
           updated_at: new Date().toISOString(),
         });
-        await commitAgentflowArtifacts(repoRoot, options.runId, 'resume-finalize');
+        await commitAgentflowArtifacts(
+          repoRoot,
+          options.runId,
+          'resume-finalize',
+        );
         return {
           status: 'finalized',
           run_id: options.runId,
@@ -153,7 +166,9 @@ export class Finalizer {
         artifactIndex,
         runState,
         reasonCode: `unit_decision_${decisionValue || 'unknown'}`,
-        classification: String(decision.failure_classification ?? 'unit_not_passed'),
+        classification: String(
+          decision.failure_classification ?? 'unit_not_passed',
+        ),
         message: `Resume found terminal unit decision: ${decisionValue || 'unknown'}.`,
         resumeFrom: decisionValue || null,
         cannotResumeReason:
@@ -193,8 +208,13 @@ export class Finalizer {
     };
   }
 
-  private async writeFinalReport(input: FinalizerInput): Promise<FinalizerResult> {
-    const artifactIndex = await readArtifactIndex(input.repoRoot, this.registry);
+  private async writeFinalReport(
+    input: FinalizerInput,
+  ): Promise<FinalizerResult> {
+    const artifactIndex = await readArtifactIndex(
+      input.repoRoot,
+      this.registry,
+    );
     const decisionPayload = await readCanonicalPayload(
       input.repoRoot,
       input.evaluator.unitDecisionRef,
@@ -252,7 +272,10 @@ export class Finalizer {
   private async writeDecisionStopReport(
     input: FinalizerInput,
   ): Promise<FinalizerResult> {
-    const artifactIndex = await readArtifactIndex(input.repoRoot, this.registry);
+    const artifactIndex = await readArtifactIndex(
+      input.repoRoot,
+      this.registry,
+    );
     const decisionPayload = await readCanonicalPayload(
       input.repoRoot,
       input.evaluator.unitDecisionRef,
@@ -262,7 +285,9 @@ export class Finalizer {
       runId: input.runId,
       artifactIndex,
       runState: await maybeReadRunState(input.repoRoot),
-      reasonCode: String(decisionPayload.reason_code ?? input.evaluator.decision),
+      reasonCode: String(
+        decisionPayload.reason_code ?? input.evaluator.decision,
+      ),
       classification: String(
         decisionPayload.failure_classification ?? 'unit_not_passed',
       ),
@@ -306,7 +331,9 @@ export class Finalizer {
         schema_failures: 0,
         fix_loops: input.generator.mode === 'fix' ? 1 : 0,
       },
-      stop_reason: String(decisionPayload.reason_code ?? input.evaluator.decision),
+      stop_reason: String(
+        decisionPayload.reason_code ?? input.evaluator.decision,
+      ),
     });
     await commitAgentflowArtifacts(input.repoRoot, input.runId, 'stop');
 
@@ -333,7 +360,11 @@ export class Finalizer {
     readonly commitRefs?: readonly CommitRef[];
   }): Promise<ArtifactRef> {
     const finalRef = finalSummaryPath('json');
-    const existing = latestRef(options.artifactIndex, options.runId, 'final_report');
+    const existing = latestRef(
+      options.artifactIndex,
+      options.runId,
+      'final_report',
+    );
     if (existing) {
       return existing;
     }
@@ -397,7 +428,10 @@ export class Finalizer {
     readonly message: string;
     readonly resumeFrom: string | null;
   }): Promise<ResumeResult> {
-    const artifactIndex = await readArtifactIndex(options.repoRoot, this.registry);
+    const artifactIndex = await readArtifactIndex(
+      options.repoRoot,
+      this.registry,
+    );
     const reportRef = await this.writeResumeStopReport({
       repoRoot: options.repoRoot,
       runId: options.runId,
@@ -522,7 +556,9 @@ async function readArtifactIndex(
   return index as unknown as ArtifactIndex;
 }
 
-async function readRunState(repoRoot: string): Promise<Record<string, unknown>> {
+async function readRunState(
+  repoRoot: string,
+): Promise<Record<string, unknown>> {
   return parseJsonObject(
     await readFile(resolveArtifactRef(repoRoot, runStatePath()), 'utf8'),
   );
@@ -568,12 +604,17 @@ function latestRef(
   artifactType: string,
 ): ArtifactRef | undefined {
   return [...index.artifacts]
-    .filter((entry) => entry.run_id === runId && entry.artifact_type === artifactType)
+    .filter(
+      (entry) => entry.run_id === runId && entry.artifact_type === artifactType,
+    )
     .sort((left, right) => right.created_at.localeCompare(left.created_at))[0]
     ?.ref;
 }
 
-function refsForRun(index: ArtifactIndex, runId: string): readonly ArtifactRef[] {
+function refsForRun(
+  index: ArtifactIndex,
+  runId: string,
+): readonly ArtifactRef[] {
   return index.artifacts
     .filter((entry) => entry.run_id === runId)
     .map((entry) => entry.ref)
@@ -606,7 +647,10 @@ async function residualRisksForDecision(
     return [];
   }
   try {
-    const report = await readCanonicalPayload(repoRoot, parseArtifactRef(evaluatorReportRef));
+    const report = await readCanonicalPayload(
+      repoRoot,
+      parseArtifactRef(evaluatorReportRef),
+    );
     return Array.isArray(report.residual_risks) ? report.residual_risks : [];
   } catch {
     return [];
@@ -621,13 +665,15 @@ function metricsSummary(
   const entries = index.artifacts.filter((entry) => entry.run_id === runId);
   return {
     artifact_count: entries.length,
-    role_output_count: entries.filter((entry) => entry.artifact_type === 'role_output')
-      .length,
+    role_output_count: entries.filter(
+      (entry) => entry.artifact_type === 'role_output',
+    ).length,
     routing_decision_count: entries.filter(
       (entry) => entry.artifact_type === 'routing_decision',
     ).length,
-    commit_count: uniqueCommitRefs(entries.flatMap((entry) => entry.commit_refs))
-      .length,
+    commit_count: uniqueCommitRefs(
+      entries.flatMap((entry) => entry.commit_refs),
+    ).length,
     verification: {
       total: extra.verificationResults?.length ?? 0,
       passed:
@@ -730,11 +776,9 @@ async function commitAgentflowArtifacts(
     return;
   }
 
-  await execFileAsync(
-    'git',
-    ['commit', '-m', `agentflow ${phase}: ${runId}`],
-    { cwd: repoRoot },
-  );
+  await execFileAsync('git', ['commit', '-m', `agentflow ${phase}: ${runId}`], {
+    cwd: repoRoot,
+  });
 }
 
 async function isGitRepository(repoRoot: string): Promise<boolean> {
