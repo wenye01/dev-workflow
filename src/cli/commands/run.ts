@@ -20,6 +20,7 @@ import {
   EvaluatorPipelineError,
 } from '../../evaluator/evaluator-pipeline.js';
 import { ProjectIndexError } from '../../project-index/util.js';
+import { Finalizer } from '../../reporting/finalizer.js';
 import { SchemaValidationError } from '../../schemas/validator.js';
 
 export function registerRunCommand(program: Command): void {
@@ -80,11 +81,19 @@ export function registerRunCommand(program: Command): void {
               planner: plannerResult,
               generator: generatorResult,
             });
+            const finalizerResult = await new Finalizer().complete({
+              repoRoot: contextResult.repoRoot,
+              runId: contextResult.runId,
+              context: contextResult,
+              planner: plannerResult,
+              generator: generatorResult,
+              evaluator: evaluatorResult,
+            });
 
             console.log(
               JSON.stringify(
                 {
-                  status: 'decision_ready',
+                  status: finalizerResult.status,
                   run_id: contextResult.runId,
                   repo: contextResult.repoRoot,
                   context_status: contextResult.status,
@@ -115,6 +124,8 @@ export function registerRunCommand(program: Command): void {
                     evaluator_role_output: evaluatorResult.roleOutputRef,
                     evaluator_report: evaluatorResult.evaluatorReportRef,
                     unit_decision: evaluatorResult.unitDecisionRef,
+                    final_or_stop_report: finalizerResult.reportRef,
+                    final_run_state: finalizerResult.runStateRef,
                   },
                   unit: {
                     unit_id: plannerResult.unitId,
@@ -125,10 +136,9 @@ export function registerRunCommand(program: Command): void {
                     decision: evaluatorResult.decision,
                     verification_results: evaluatorResult.verificationResults,
                   },
-                  next:
-                    evaluatorResult.decision === 'pass'
-                      ? 'Finalize runtime is implemented in Milestone 11.'
-                      : 'Use the unit decision artifact to determine the next pipeline action.',
+                  resume_from: finalizerResult.resumeFrom,
+                  cannot_resume_reason:
+                    finalizerResult.cannotResumeReason ?? null,
                 },
                 null,
                 2,

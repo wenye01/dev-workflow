@@ -14,16 +14,21 @@
           "required": [
             "status",
             "summary",
+            "target_result",
             "unit_decisions",
             "residual_risks",
             "artifact_refs",
             "commit_refs",
+            "project_index_manifest_ref",
             "metrics"
           ],
           "additionalProperties": false,
           "properties": {
             "status": { "const": "finalized" },
             "summary": {
+              "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
+            },
+            "target_result": {
               "$ref": "agentflow.schema.common.v1#/$defs/non_empty_string"
             },
             "unit_decisions": {
@@ -47,6 +52,9 @@
               "items": {
                 "$ref": "agentflow.schema.common.v1#/$defs/commit_ref"
               }
+            },
+            "project_index_manifest_ref": {
+              "$ref": "agentflow.schema.common.v1#/$defs/artifact_ref"
             },
             "metrics": { "type": "object", "additionalProperties": true }
           }

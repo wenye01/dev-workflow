@@ -133,15 +133,27 @@ describe('Context Builder MVP', () => {
 
     expect(error).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
-    expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({
-      status: 'decision_ready',
+    const output = JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}') as {
+      readonly status?: string;
+      readonly outputs?: { readonly final_or_stop_report?: string };
+    };
+    expect(output).toMatchObject({
+      status: expect.stringMatching(/^(finalized|stopped)$/),
       run_id: 'run-cli-context',
       context_status: expect.any(String),
       project_index_status: 'built',
+      outputs: {
+        final_or_stop_report: expect.stringMatching(
+          /^\.agentflow\/(?:final-summary|stop-report)\.json$/,
+        ),
+      },
       unit: {
         decision: expect.stringMatching(/^(pass|fix|re_evaluate|stop)$/),
       },
     });
+    await expect(
+      readFile(path.join(repo, output.outputs?.final_or_stop_report ?? ''), 'utf8'),
+    ).resolves.toBeTypeOf('string');
 
     await expectPlannerArtifacts(repo);
     await expectGeneratorArtifacts(repo);
