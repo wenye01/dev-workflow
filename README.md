@@ -17,10 +17,11 @@ agentflow validate <artifact>
 agentflow doctor --config <file>
 ```
 
-`agentflow run` currently initializes through the Milestone 5 Context Builder:
+`agentflow run` currently initializes through the Milestone 8 Planner pipeline:
 it builds or reuses Project Index artifacts, writes selected context, source
-slices, and Planner/Generator/Evaluator role inputs, then stops before Planner
-runtime.
+slices, Planner/Generator/Evaluator role inputs, and now materializes the
+Planner Package, Acceptance Contract, and Batch Schedule. Generator runtime is
+not implemented yet.
 
 ## Development
 

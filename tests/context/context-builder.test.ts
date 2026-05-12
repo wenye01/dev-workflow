@@ -109,7 +109,7 @@ describe('Context Builder MVP', () => {
     ).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it('wires agentflow run through Context Builder and stops before Planner runtime', async () => {
+  it('wires agentflow run through Context Builder and completes the Planner pipeline', async () => {
     const repo = await makeTypeScriptRepo('cli-run');
     const { taskPath, configPath } = await writeRunInputs(repo);
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -134,13 +134,60 @@ describe('Context Builder MVP', () => {
     expect(error).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
     expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({
-      status: 'context_ready',
+      status: 'planner_ready',
       run_id: 'run-cli-context',
+      context_status: expect.any(String),
       project_index_status: 'built',
-      next: 'Planner runtime is not implemented until Milestone 8.',
+      next: 'Generator runtime is not implemented until Milestone 9.',
     });
+
+    await expectPlannerArtifacts(repo);
   });
 });
+
+async function expectPlannerArtifacts(repo: string): Promise<void> {
+  const registry = SchemaRegistry.load();
+  const refs = [
+    '.agentflow/routing/decision.json',
+    '.agentflow/routing/requests/1-planner.initial.json',
+    '.agentflow/planner/package.json',
+    '.agentflow/planner/batch-schedule.json',
+    '.agentflow/units/auth-refresh/contract.json',
+  ];
+
+  for (const ref of refs) {
+    await expect(readFile(path.join(repo, ref), 'utf8')).resolves.toBeTypeOf(
+      'string',
+    );
+  }
+
+  registry.assertCanonicalArtifact(
+    'routing_decision',
+    await readJson(path.join(repo, '.agentflow', 'routing', 'decision.json')),
+  );
+  registry.assertCanonicalArtifact(
+    'role_run_request',
+    await readJson(
+      path.join(repo, '.agentflow', 'routing', 'requests', '1-planner.initial.json'),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'planner_package',
+    await readJson(path.join(repo, '.agentflow', 'planner', 'package.json')),
+  );
+  registry.assertCanonicalArtifact(
+    'batch_schedule',
+    await readJson(
+      path.join(repo, '.agentflow', 'planner', 'batch-schedule.json'),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'acceptance_contract',
+    await readJson(
+      path.join(repo, '.agentflow', 'units', 'auth-refresh', 'contract.json'),
+    ),
+  );
+}
 
 async function expectContextFiles(
   repo: string,
