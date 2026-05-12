@@ -78,11 +78,19 @@ export function plannerPath(name: string): ArtifactRef {
   return artifactPath('planner', name);
 }
 
+export function plannerBatchSchedulePath(): ArtifactRef {
+  return plannerPath('batch-schedule.json');
+}
+
 export function unitPath(
   unitId: UnitId,
   ...segments: readonly ArtifactPathSegment[]
 ): ArtifactRef {
   return artifactPath('units', unitId, ...segments);
+}
+
+export function unitContractPath(unitId: UnitId): ArtifactRef {
+  return unitPath(unitId, 'contract.json');
 }
 
 export function unitStatePath(unitId: UnitId): ArtifactRef {
