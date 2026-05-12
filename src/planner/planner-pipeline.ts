@@ -205,8 +205,11 @@ export class PlannerPipeline {
         message: 'Planner Package did not produce an acceptance contract.',
       });
     }
-    const { unit_ref: _unitRef, ...acceptanceContractPayload } =
-      acceptanceContractSource;
+    const acceptanceContractPayload = Object.fromEntries(
+      Object.entries(acceptanceContractSource).filter(
+        ([key]) => key !== 'unit_ref',
+      ),
+    );
 
     await store.writeProgramArtifact({
       artifactType: 'acceptance_contract',

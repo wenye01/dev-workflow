@@ -11,6 +11,10 @@ import {
   PlannerPipeline,
   PlannerPipelineError,
 } from '../../planner/planner-pipeline.js';
+import {
+  GeneratorPipeline,
+  GeneratorPipelineError,
+} from '../../generator/generator-pipeline.js';
 import { ProjectIndexError } from '../../project-index/util.js';
 import { SchemaValidationError } from '../../schemas/validator.js';
 
@@ -57,11 +61,18 @@ export function registerRunCommand(program: Command): void {
               taskPath: options.task,
               context: contextResult,
             });
+            const generatorResult = await new GeneratorPipeline().build({
+              repoRoot: contextResult.repoRoot,
+              runId: contextResult.runId,
+              configPath: options.config,
+              context: contextResult,
+              planner: plannerResult,
+            });
 
             console.log(
               JSON.stringify(
                 {
-                  status: 'planner_ready',
+                  status: 'generator_ready',
                   run_id: contextResult.runId,
                   repo: contextResult.repoRoot,
                   context_status: contextResult.status,
@@ -75,12 +86,23 @@ export function registerRunCommand(program: Command): void {
                     acceptance_contract: plannerResult.acceptanceContractRef,
                     run_state: plannerResult.runStateRef,
                     unit_state: plannerResult.unitStateRef,
+                    generation_input: generatorResult.generationInputRef,
+                    generator_routing_decision:
+                      generatorResult.routingDecisionRef,
+                    generator_role_run_request:
+                      generatorResult.roleRunRequestRef,
+                    generator_role_input: generatorResult.roleInputRef,
+                    generator_role_output: generatorResult.roleOutputRef,
+                    change_package: generatorResult.changePackageRef,
                   },
                   unit: {
                     unit_id: plannerResult.unitId,
                     batch_id: plannerResult.batchId,
+                    generator_mode: generatorResult.mode,
+                    changed_files: generatorResult.changedFiles,
+                    commit: generatorResult.commitRef ?? null,
                   },
-                  next: 'Generator runtime is not implemented until Milestone 9.',
+                  next: 'Evaluator runtime is not implemented until Milestone 10.',
                 },
                 null,
                 2,
@@ -161,6 +183,7 @@ function codeForError(error: unknown): string {
   if (
     error instanceof ContextBuilderError ||
     error instanceof PlannerPipelineError ||
+    error instanceof GeneratorPipelineError ||
     error instanceof ProjectIndexError
   ) {
     return error.code;
@@ -179,6 +202,10 @@ function classificationForError(error: unknown): string {
   }
 
   if (error instanceof PlannerPipelineError) {
+    return error.classification;
+  }
+
+  if (error instanceof GeneratorPipelineError) {
     return error.classification;
   }
 
@@ -211,6 +238,24 @@ function stopReportPayloadForError(error: unknown): Record<string, unknown> {
         'Inspect the planner pipeline error details.',
         'Adjust the task scope or acceptance contract inputs.',
         'Run agentflow run again after correcting the plan inputs.',
+      ],
+    };
+  }
+
+  if (error instanceof GeneratorPipelineError) {
+    return {
+      status: 'stopped',
+      reason_code: 'generator_pipeline_failed',
+      classification: error.classification,
+      message: error.message,
+      details: error.details ?? null,
+      resume_from: null,
+      cannot_resume_reason:
+        'Generator could not produce a valid in-scope Change Package for this run.',
+      suggested_actions: [
+        'Inspect the generator pipeline error details.',
+        'Fix provider configuration or narrow the unit scope.',
+        'Run agentflow run again after correcting the generator inputs.',
       ],
     };
   }

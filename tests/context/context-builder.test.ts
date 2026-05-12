@@ -134,14 +134,15 @@ describe('Context Builder MVP', () => {
     expect(error).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
     expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({
-      status: 'planner_ready',
+      status: 'generator_ready',
       run_id: 'run-cli-context',
       context_status: expect.any(String),
       project_index_status: 'built',
-      next: 'Generator runtime is not implemented until Milestone 9.',
+      next: 'Evaluator runtime is not implemented until Milestone 10.',
     });
 
     await expectPlannerArtifacts(repo);
+    await expectGeneratorArtifacts(repo);
   });
 });
 
@@ -197,6 +198,100 @@ async function expectPlannerArtifacts(repo: string): Promise<void> {
     'unit_state',
     await readJson(
       path.join(repo, '.agentflow', 'units', 'auth-refresh', 'state.json'),
+    ),
+  );
+}
+
+async function expectGeneratorArtifacts(repo: string): Promise<void> {
+  const registry = SchemaRegistry.load();
+  const refs = [
+    '.agentflow/units/auth-refresh/generation-input.initial.json',
+    '.agentflow/units/auth-refresh/generation-input.initial.md',
+    '.agentflow/units/auth-refresh/generator-routing.initial.json',
+    '.agentflow/units/auth-refresh/generator-request.initial.json',
+    '.agentflow/units/auth-refresh/roles/generator-input.initial.json',
+    '.agentflow/units/auth-refresh/roles/generator-output.initial.json',
+    '.agentflow/units/auth-refresh/change-package.initial.json',
+  ];
+
+  for (const ref of refs) {
+    await expect(readFile(path.join(repo, ref), 'utf8')).resolves.toBeTypeOf(
+      'string',
+    );
+  }
+
+  registry.assertCanonicalArtifact(
+    'generation_input',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'generation-input.initial.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'routing_decision',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'generator-routing.initial.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'role_run_request',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'generator-request.initial.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'role_input',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'roles',
+        'generator-input.initial.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'role_output',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'roles',
+        'generator-output.initial.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'change_package',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'change-package.initial.json',
+      ),
     ),
   );
 }
@@ -288,7 +383,23 @@ async function writeRunInputs(
   const taskPath = path.join(repo, 'TASK.md');
   const configPath = path.join(repo, 'agentflow.config.yaml');
   await writeText(repo, 'TASK.md', `# Fixture Task\n\n${task}\n`);
-  await writeText(repo, 'agentflow.config.yaml', 'providers: {}\nroles: {}\n');
+  await writeText(
+    repo,
+    'agentflow.config.yaml',
+    [
+      'providers:',
+      '  mock-generator:',
+      '    type: mock',
+      '    model: mock-generator',
+      '    mock_scenario: success_with_change',
+      'roles:',
+      '  generator.implementer:',
+      '    provider_candidates:',
+      '      - provider: mock-generator',
+      '        model: mock-generator',
+      '',
+    ].join('\n'),
+  );
   await git(repo, ['add', 'TASK.md', 'agentflow.config.yaml']);
   await git(repo, ['commit', '-m', 'add run inputs']);
   return { taskPath, configPath };

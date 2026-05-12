@@ -56,7 +56,7 @@ describe('AdapterManager provider selection', () => {
     );
     await expect(
       readFile(path.join(cwd, outputArtifact), 'utf8'),
-    ).resolves.toContain('"scenario": "success_no_change"');
+    ).resolves.toContain('scenario success_no_change');
   });
 
   it('does not fall back on schema failure', async () => {

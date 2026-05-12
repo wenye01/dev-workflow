@@ -202,19 +202,59 @@ async function writeMockArtifact(
   }
 
   const outputPath = resolveArtifactRef(request.cwd, request.outputArtifact);
+  const changedPath = firstAllowedPath(request) ?? 'src/index.ts';
   const payload = {
-    schema_version: 'agentflow.mock_role_output.v1',
-    request_id: request.requestId,
-    role: request.role,
-    provider: provider.name,
-    model: request.model,
-    scenario,
-    result: {
-      changed: scenario === 'success_with_change',
-      valid_business_output: scenario !== 'schema_failure',
-    },
+    status:
+      scenario === 'unsafe'
+        ? 'unsafe'
+        : scenario === 'success_no_change'
+          ? 'no_change'
+          : scenario === 'business_failure' || scenario === 'test_failure'
+            ? 'completed_with_issues'
+            : 'completed',
+    summary: `Mock ${request.role} completed with scenario ${scenario}.`,
+    changed_files:
+      scenario === 'success_with_change' || scenario === 'test_failure'
+        ? [
+            {
+              path: changedPath,
+              change_type: 'modified',
+              reason: 'Mock generator reports a deterministic fixture change.',
+            },
+          ]
+        : [],
+    verification:
+      scenario === 'test_failure'
+        ? [
+            {
+              command: 'npm test',
+              kind: 'test',
+              status: 'failed',
+              summary: 'Mock test failure.',
+            },
+          ]
+        : [],
+    criteria_mapping: [],
+    evidence: [],
+    issues:
+      scenario === 'business_failure' || scenario === 'test_failure'
+        ? ['Mock role reported an issue.']
+        : [],
+    risks: [],
   };
 
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+}
+
+function firstAllowedPath(request: AgentRunRequest): string | undefined {
+  const allowedPaths = request.metadata?.allowedPaths;
+  if (!Array.isArray(allowedPaths)) {
+    return undefined;
+  }
+
+  return allowedPaths.find(
+    (value): value is string =>
+      typeof value === 'string' && !value.includes('*') && value.length > 0,
+  );
 }

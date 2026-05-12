@@ -97,6 +97,20 @@ export function unitStatePath(unitId: UnitId): ArtifactRef {
   return unitPath(unitId, 'state.json');
 }
 
+export function unitGenerationInputPath(
+  unitId: UnitId,
+  mode: 'initial' | 'fix' = 'initial',
+): ArtifactRef {
+  return unitPath(unitId, `generation-input.${mode}.json`);
+}
+
+export function unitChangePackagePath(
+  unitId: UnitId,
+  mode: 'initial' | 'fix' = 'initial',
+): ArtifactRef {
+  return unitPath(unitId, `change-package.${mode}.json`);
+}
+
 export function unitRolePath(
   unitId: UnitId,
   roleOutputName: ArtifactPathSegment,
