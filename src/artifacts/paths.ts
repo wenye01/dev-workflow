@@ -111,6 +111,24 @@ export function unitChangePackagePath(
   return unitPath(unitId, `change-package.${mode}.json`);
 }
 
+export function unitEvaluationInputPath(
+  unitId: UnitId,
+  attempt = 0,
+): ArtifactRef {
+  return unitPath(unitId, `evaluation-input.${attempt}.json`);
+}
+
+export function unitEvaluatorReportPath(
+  unitId: UnitId,
+  attempt = 0,
+): ArtifactRef {
+  return unitPath(unitId, `evaluator-report.${attempt}.json`);
+}
+
+export function unitDecisionPath(unitId: UnitId, attempt = 0): ArtifactRef {
+  return unitPath(unitId, `decision.${attempt}.json`);
+}
+
 export function unitRolePath(
   unitId: UnitId,
   roleOutputName: ArtifactPathSegment,

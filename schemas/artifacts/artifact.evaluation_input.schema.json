@@ -28,10 +28,35 @@
               "type": "object",
               "additionalProperties": true
             },
+            "context": {
+              "$ref": "agentflow.schema.project_index.common.v1#/$defs/selected_project_context"
+            },
             "changed_files": {
               "type": "array",
               "items": {
                 "$ref": "agentflow.schema.common.v1#/$defs/changed_file"
+              }
+            },
+            "file_snapshots": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["path", "status"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "$ref": "agentflow.schema.common.v1#/$defs/relative_path"
+                  },
+                  "status": {
+                    "enum": ["read", "missing", "skipped"]
+                  },
+                  "content_sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "content_excerpt": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
               }
             },
             "diff_summary": { "type": "string" },

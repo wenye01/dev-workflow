@@ -15,6 +15,10 @@ import {
   GeneratorPipeline,
   GeneratorPipelineError,
 } from '../../generator/generator-pipeline.js';
+import {
+  EvaluatorPipeline,
+  EvaluatorPipelineError,
+} from '../../evaluator/evaluator-pipeline.js';
 import { ProjectIndexError } from '../../project-index/util.js';
 import { SchemaValidationError } from '../../schemas/validator.js';
 
@@ -68,11 +72,19 @@ export function registerRunCommand(program: Command): void {
               context: contextResult,
               planner: plannerResult,
             });
+            const evaluatorResult = await new EvaluatorPipeline().build({
+              repoRoot: contextResult.repoRoot,
+              runId: contextResult.runId,
+              configPath: options.config,
+              context: contextResult,
+              planner: plannerResult,
+              generator: generatorResult,
+            });
 
             console.log(
               JSON.stringify(
                 {
-                  status: 'generator_ready',
+                  status: 'decision_ready',
                   run_id: contextResult.runId,
                   repo: contextResult.repoRoot,
                   context_status: contextResult.status,
@@ -94,6 +106,15 @@ export function registerRunCommand(program: Command): void {
                     generator_role_input: generatorResult.roleInputRef,
                     generator_role_output: generatorResult.roleOutputRef,
                     change_package: generatorResult.changePackageRef,
+                    evaluation_input: evaluatorResult.evaluationInputRef,
+                    evaluator_routing_decision:
+                      evaluatorResult.routingDecisionRef,
+                    evaluator_role_run_request:
+                      evaluatorResult.roleRunRequestRef,
+                    evaluator_role_input: evaluatorResult.roleInputRef,
+                    evaluator_role_output: evaluatorResult.roleOutputRef,
+                    evaluator_report: evaluatorResult.evaluatorReportRef,
+                    unit_decision: evaluatorResult.unitDecisionRef,
                   },
                   unit: {
                     unit_id: plannerResult.unitId,
@@ -101,8 +122,13 @@ export function registerRunCommand(program: Command): void {
                     generator_mode: generatorResult.mode,
                     changed_files: generatorResult.changedFiles,
                     commit: generatorResult.commitRef ?? null,
+                    decision: evaluatorResult.decision,
+                    verification_results: evaluatorResult.verificationResults,
                   },
-                  next: 'Evaluator runtime is not implemented until Milestone 10.',
+                  next:
+                    evaluatorResult.decision === 'pass'
+                      ? 'Finalize runtime is implemented in Milestone 11.'
+                      : 'Use the unit decision artifact to determine the next pipeline action.',
                 },
                 null,
                 2,
@@ -184,6 +210,7 @@ function codeForError(error: unknown): string {
     error instanceof ContextBuilderError ||
     error instanceof PlannerPipelineError ||
     error instanceof GeneratorPipelineError ||
+    error instanceof EvaluatorPipelineError ||
     error instanceof ProjectIndexError
   ) {
     return error.code;
@@ -206,6 +233,10 @@ function classificationForError(error: unknown): string {
   }
 
   if (error instanceof GeneratorPipelineError) {
+    return error.classification;
+  }
+
+  if (error instanceof EvaluatorPipelineError) {
     return error.classification;
   }
 
@@ -256,6 +287,24 @@ function stopReportPayloadForError(error: unknown): Record<string, unknown> {
         'Inspect the generator pipeline error details.',
         'Fix provider configuration or narrow the unit scope.',
         'Run agentflow run again after correcting the generator inputs.',
+      ],
+    };
+  }
+
+  if (error instanceof EvaluatorPipelineError) {
+    return {
+      status: 'stopped',
+      reason_code: 'evaluator_pipeline_failed',
+      classification: error.classification,
+      message: error.message,
+      details: error.details ?? null,
+      resume_from: null,
+      cannot_resume_reason:
+        'Evaluator could not produce a valid structured decision for this run.',
+      suggested_actions: [
+        'Inspect the evaluator pipeline error details.',
+        'Fix provider configuration or verification command failures.',
+        'Run agentflow run again after correcting the evaluator inputs.',
       ],
     };
   }

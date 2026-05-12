@@ -134,15 +134,18 @@ describe('Context Builder MVP', () => {
     expect(error).not.toHaveBeenCalled();
     expect(process.exitCode).toBeUndefined();
     expect(JSON.parse(log.mock.calls.at(-1)?.[0] ?? '{}')).toMatchObject({
-      status: 'generator_ready',
+      status: 'decision_ready',
       run_id: 'run-cli-context',
       context_status: expect.any(String),
       project_index_status: 'built',
-      next: 'Evaluator runtime is not implemented until Milestone 10.',
+      unit: {
+        decision: expect.stringMatching(/^(pass|fix|re_evaluate|stop)$/),
+      },
     });
 
     await expectPlannerArtifacts(repo);
     await expectGeneratorArtifacts(repo);
+    await expectEvaluatorArtifacts(repo);
   });
 });
 
@@ -296,6 +299,63 @@ async function expectGeneratorArtifacts(repo: string): Promise<void> {
   );
 }
 
+async function expectEvaluatorArtifacts(repo: string): Promise<void> {
+  const registry = SchemaRegistry.load();
+  const refs = [
+    '.agentflow/units/auth-refresh/evaluation-input.0.json',
+    '.agentflow/units/auth-refresh/evaluation-input.0.md',
+    '.agentflow/units/auth-refresh/evaluator-routing.0.json',
+    '.agentflow/units/auth-refresh/evaluator-request.0.json',
+    '.agentflow/units/auth-refresh/roles/evaluator-input.0.json',
+    '.agentflow/units/auth-refresh/roles/evaluator-output.0.json',
+    '.agentflow/units/auth-refresh/evaluator-report.0.json',
+    '.agentflow/units/auth-refresh/decision.0.json',
+  ];
+
+  for (const ref of refs) {
+    await expect(readFile(path.join(repo, ref), 'utf8')).resolves.toBeTypeOf(
+      'string',
+    );
+  }
+
+  registry.assertCanonicalArtifact(
+    'evaluation_input',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'evaluation-input.0.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'evaluator_report',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'evaluator-report.0.json',
+      ),
+    ),
+  );
+  registry.assertCanonicalArtifact(
+    'unit_decision',
+    await readJson(
+      path.join(
+        repo,
+        '.agentflow',
+        'units',
+        'auth-refresh',
+        'decision.0.json',
+      ),
+    ),
+  );
+}
+
 async function expectContextFiles(
   repo: string,
   outputs: {
@@ -392,11 +452,19 @@ async function writeRunInputs(
       '    type: mock',
       '    model: mock-generator',
       '    mock_scenario: success_with_change',
+      '  mock-evaluator:',
+      '    type: mock',
+      '    model: mock-evaluator',
+      '    mock_scenario: success_no_change',
       'roles:',
       '  generator.implementer:',
       '    provider_candidates:',
       '      - provider: mock-generator',
       '        model: mock-generator',
+      '  evaluator.contract_checker:',
+      '    provider_candidates:',
+      '      - provider: mock-evaluator',
+      '        model: mock-evaluator',
       '',
     ].join('\n'),
   );
