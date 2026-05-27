@@ -59,7 +59,7 @@ describe('provider and role catalog tools', () => {
       providers: expect.arrayContaining([
         expect.objectContaining({
           provider: 'mock-primary',
-          type: 'mock',
+          agent: 'mock',
           capabilities: expect.objectContaining({
             nonInteractive: true,
             schemaOutput: true,
@@ -81,11 +81,11 @@ async function writeConfig(): Promise<string> {
       {
         providers: {
           'mock-primary': {
-            type: 'mock',
+            agent: 'mock',
             model: 'mock-plan',
           },
           'mock-fallback': {
-            type: 'mock',
+            agent: 'mock',
             model: 'mock-fallback',
           },
         },

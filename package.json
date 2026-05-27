@@ -8,6 +8,7 @@
   },
   "files": [
     "dist",
+    "codeagent-wrapper",
     "fixtures",
     "schemas",
     "README.md"
@@ -18,12 +19,14 @@
   },
   "scripts": {
     "build": "tsup",
+    "build:wrapper": "cd codeagent-wrapper && go build -o codeagent-wrapper .",
+    "build:wrapper:all": "cd codeagent-wrapper && bash build-all.sh",
     "clean": "rimraf dist coverage agentflow-*.tgz",
     "dev": "tsx src/cli/index.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "prepack": "npm run build",
+    "prepack": "npm run build && npm run build:wrapper",
     "test": "vitest run",
     "test:context": "vitest run tests/context",
     "test:project-index": "vitest run tests/project-index",

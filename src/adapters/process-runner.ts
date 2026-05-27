@@ -67,14 +67,14 @@ export async function runCommandSmokeTest(
 
     return {
       provider: provider.name,
-      type: provider.type,
+      agent: provider.agent,
       command: provider.command,
       status: 'passed',
     };
   } catch (error) {
     return {
       provider: provider.name,
-      type: provider.type,
+      agent: provider.agent,
       command: provider.command,
       status: 'failed',
       message: error instanceof Error ? error.message : String(error),

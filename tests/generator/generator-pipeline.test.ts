@@ -171,7 +171,7 @@ function generatorConfig(scenario: string): string {
   return [
     'providers:',
     '  mock-generator:',
-    '    type: mock',
+    '    agent: mock',
     '    model: mock-generator',
     `    mock_scenario: ${scenario}`,
     'roles:',

@@ -13,9 +13,7 @@ import {
   type ProviderRequirements,
 } from '../config/provider-registry.js';
 import { RoleCatalog } from '../config/role-catalog.js';
-import { ClaudeAdapter } from './claude-adapter.js';
-import { CodexAdapter } from './codex-adapter.js';
-import { MockAdapter } from './mock-adapter.js';
+import { CodeagentWrapperClient } from './codeagent-wrapper-adapter.js';
 import type { AgentAdapter } from './types.js';
 
 export interface AdapterManagerRunOptions {
@@ -34,7 +32,7 @@ export interface AdapterManagerRunOptions {
 }
 
 export interface AdapterManagerOptions {
-  readonly adapters?: readonly AgentAdapter[];
+  readonly wrapperClient?: AgentAdapter;
   readonly activeProcessCounts?: ReadonlyMap<string, number>;
   readonly checkCommandAvailability?: boolean;
 }
@@ -84,7 +82,7 @@ export class AdapterSelectionError extends Error {
 export class AdapterManager {
   private readonly roleCatalog: RoleCatalog;
   private readonly providerRegistry: ProviderRegistry;
-  private readonly adapters: ReadonlyMap<string, AgentAdapter>;
+  private readonly wrapperClient: AgentAdapter;
 
   constructor(
     private readonly config: AgentflowConfig,
@@ -92,12 +90,7 @@ export class AdapterManager {
   ) {
     this.roleCatalog = new RoleCatalog(config);
     this.providerRegistry = new ProviderRegistry(config.providers);
-    this.adapters = new Map(
-      (options.adapters ?? defaultAdapters()).map((adapter) => [
-        adapter.providerType,
-        adapter,
-      ]),
-    );
+    this.wrapperClient = options.wrapperClient ?? new CodeagentWrapperClient();
   }
 
   async runRole(options: AdapterManagerRunOptions): Promise<AgentRunResult> {
@@ -136,12 +129,6 @@ export class AdapterManager {
         continue;
       }
 
-      const adapter = this.adapters.get(provider.type);
-      if (!adapter) {
-        fallbackReasons.push(`adapter_not_registered:${provider.type}`);
-        continue;
-      }
-
       const readiness = await this.providerRegistry.inspect(
         provider,
         requirementsForRun(options, candidateModel),
@@ -161,7 +148,7 @@ export class AdapterManager {
       }
 
       const request = buildRunRequest(options, provider, candidateModel);
-      const result = await adapter.run(request, provider);
+      const result = await this.wrapperClient.run(request, provider);
       const decorated = decorateResult({
         result,
         candidates,
@@ -207,10 +194,6 @@ export class AdapterManager {
 
     return buildRunRequest(options, provider, model);
   }
-}
-
-function defaultAdapters(): readonly AgentAdapter[] {
-  return [new MockAdapter(), new CodexAdapter(), new ClaudeAdapter()];
 }
 
 function requirementsForRun(

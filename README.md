@@ -36,8 +36,16 @@ npm install
 npm test
 npm run test:context
 npm run build
+npm run build:wrapper
 npm pack
 ```
+
+## Agent backends
+
+Codex, Claude, and Gemini providers are invoked through the bundled
+`codeagent-wrapper` source imported from `wenye01/ccg-workflow`. Build a local
+wrapper binary with `npm run build:wrapper`, or set `CODEAGENT_WRAPPER_PATH` /
+provider `wrapper_path` to use a specific wrapper binary.
 
 ## Cross-platform checks
 

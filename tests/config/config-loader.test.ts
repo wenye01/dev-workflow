@@ -19,8 +19,8 @@ describe('loadAgentflowConfig', () => {
 
     expect(config.sources).toEqual([]);
     expect(config.providers.codex).toMatchObject({
-      type: 'codex',
-      command: 'codex',
+      agent: 'codex',
+      command: 'codeagent-wrapper',
     });
     expect(config.roles['planner.router']?.providerCandidates).toEqual([
       { provider: 'codex' },
@@ -40,7 +40,7 @@ describe('loadAgentflowConfig', () => {
           sandbox: 'read-only',
         },
         claude: {
-          type: 'claude',
+          agent: 'claude',
           model: 'global-claude',
         },
       },
@@ -70,12 +70,12 @@ describe('loadAgentflowConfig', () => {
 
     expect(config.sources).toEqual([globalConfig, projectConfig]);
     expect(config.providers.codex).toMatchObject({
-      type: 'codex',
+      agent: 'codex',
       model: 'project-model',
       sandbox: 'read-only',
     });
     expect(config.providers.claude).toMatchObject({
-      type: 'claude',
+      agent: 'claude',
       model: 'global-claude',
     });
     expect(config.roles['planner.router']?.providerCandidates).toEqual([

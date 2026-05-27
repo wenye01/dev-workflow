@@ -132,7 +132,7 @@ async function writeConfig(runRoot: string): Promise<void> {
     [
       'providers:',
       '  mock-router:',
-      '    type: mock',
+      '    agent: mock',
       '    model: mock-router',
       'roles:',
       '  planner.router:',

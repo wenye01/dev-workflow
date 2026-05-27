@@ -6,7 +6,7 @@ import { parse as parseYaml } from 'yaml';
 
 import { isRecord } from '../schemas/validator.js';
 
-export type ProviderType = 'mock' | 'codex' | 'claude';
+export type AgentName = 'mock' | 'codex' | 'claude' | 'gemini';
 
 export interface ProviderCapabilityOverrides {
   readonly nonInteractive?: boolean;
@@ -24,8 +24,9 @@ export interface ProviderCapabilityOverrides {
 
 export interface ProviderConfig {
   readonly name: string;
-  readonly type: ProviderType;
+  readonly agent: AgentName;
   readonly command: string;
+  readonly wrapperPath?: string;
   readonly model?: string;
   readonly enabled: boolean;
   readonly available?: boolean;
@@ -108,8 +109,7 @@ export interface LoadAgentflowConfigOptions {
 const DEFAULT_CONFIG: Readonly<Record<string, unknown>> = {
   providers: {
     codex: {
-      type: 'codex',
-      command: 'codex',
+      agent: 'codex',
     },
   },
   roles: {
@@ -272,20 +272,26 @@ function normalizeProviders(
   return Object.fromEntries(
     Object.entries(providers).map(([name, value]) => {
       const raw = normalizeNamedRecord(value, `providers.${name}`);
-      const type = normalizeProviderType(
-        readString(raw, 'type') ?? inferProviderType(name),
+      const agent = normalizeAgentName(
+        readString(raw, 'agent') ?? inferAgentName(name),
         name,
       );
+      const wrapperPath =
+        readString(raw, 'wrapper_path') ??
+        readString(raw, 'codeagent_wrapper_path') ??
+        readString(raw, 'codeagent_wrapper');
       const command =
-        readString(raw, 'command') ??
-        (type === 'mock' ? 'agentflow-mock' : type);
+        readString(raw, 'wrapper_command') ??
+        wrapperPath ??
+        'codeagent-wrapper';
 
       return [
         name,
         {
           name,
-          type,
+          agent,
           command,
+          wrapperPath,
           model: readString(raw, 'model'),
           enabled: readBoolean(raw, 'enabled') ?? true,
           available: readBoolean(raw, 'available'),
@@ -391,11 +397,13 @@ function normalizeProviderCandidates(
   return [];
 }
 
-function normalizeProviderType(
-  value: string,
-  providerName: string,
-): ProviderType {
-  if (value === 'mock' || value === 'codex' || value === 'claude') {
+function normalizeAgentName(value: string, providerName: string): AgentName {
+  if (
+    value === 'mock' ||
+    value === 'codex' ||
+    value === 'claude' ||
+    value === 'gemini'
+  ) {
     return value;
   }
 
@@ -405,13 +413,17 @@ function normalizeProviderType(
   });
 }
 
-function inferProviderType(providerName: string): ProviderType {
+function inferAgentName(providerName: string): AgentName {
   if (providerName.includes('codex')) {
     return 'codex';
   }
 
   if (providerName.includes('claude')) {
     return 'claude';
+  }
+
+  if (providerName.includes('gemini')) {
+    return 'gemini';
   }
 
   return 'mock';

@@ -459,12 +459,12 @@ async function writeRunInputs(
   await writeJson(repo, '.agentflow/settings.json', {
     providers: {
       'mock-generator': {
-        type: 'mock',
+        agent: 'mock',
         model: 'mock-generator',
         mock_scenario: 'success_with_change',
       },
       'mock-evaluator': {
-        type: 'mock',
+        agent: 'mock',
         model: 'mock-evaluator',
         mock_scenario: 'success_no_change',
       },

@@ -1,6 +1,9 @@
 node_modules/
 dist/
 coverage/
+codeagent-wrapper/codeagent-wrapper
+codeagent-wrapper/*.exe
+bin/codeagent-wrapper-*
 *.log
 *.tgz
 .DS_Store

@@ -1,9 +1,6 @@
 import type { Command } from 'commander';
 
-import { ClaudeAdapter } from '../../adapters/claude-adapter.js';
-import { CodexAdapter } from '../../adapters/codex-adapter.js';
-import { MockAdapter } from '../../adapters/mock-adapter.js';
-import type { AgentAdapter } from '../../adapters/types.js';
+import { runCodeagentWrapperSmokeTest } from '../../adapters/codeagent-wrapper-adapter.js';
 import {
   ConfigError,
   type ProviderConfig,
@@ -134,26 +131,10 @@ async function buildRoleReadiness(
 async function runSmokeTests(
   providers: readonly ProviderConfig[],
 ): Promise<unknown[]> {
-  const adapters = new Map<string, AgentAdapter>(
-    [new MockAdapter(), new CodexAdapter(), new ClaudeAdapter()].map(
-      (adapter) => [adapter.providerType, adapter],
-    ),
-  );
-
   return await Promise.all(
-    providers.map(async (provider) => {
-      const adapter = adapters.get(provider.type);
-      if (!adapter?.smokeTest) {
-        return {
-          provider: provider.name,
-          type: provider.type,
-          status: 'failed',
-          message: `No smoke test is registered for provider type: ${provider.type}`,
-        };
-      }
-
-      return await adapter.smokeTest(provider);
-    }),
+    providers.map(
+      async (provider) => await runCodeagentWrapperSmokeTest(provider),
+    ),
   );
 }
 

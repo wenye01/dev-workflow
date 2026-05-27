@@ -2,9 +2,9 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import type {
+  AgentName,
   ProviderCapabilityOverrides,
   ProviderConfig,
-  ProviderType,
 } from './config-loader.js';
 
 const execFileAsync = promisify(execFile);
@@ -49,7 +49,7 @@ export interface ProviderReadinessIssue {
 
 export interface ProviderReadiness {
   readonly provider: string;
-  readonly type: ProviderType;
+  readonly agent: AgentName;
   readonly command: string;
   readonly available: boolean;
   readonly authenticated: boolean;
@@ -68,49 +68,61 @@ export interface ProviderRegistryOptions {
   readonly activeProcessCounts?: ReadonlyMap<string, number>;
 }
 
-const DEFAULT_CAPABILITIES: Readonly<
-  Record<ProviderType, ProviderCapabilities>
-> = {
-  mock: {
-    nonInteractive: true,
-    jsonOutput: true,
-    jsonlOutput: true,
-    schemaOutput: true,
-    cwd: true,
-    modelSelection: true,
-    permissionMode: true,
-    debug: true,
-    usage: true,
-    sandbox: true,
-    approval: true,
-  },
-  codex: {
-    nonInteractive: true,
-    jsonOutput: false,
-    jsonlOutput: true,
-    schemaOutput: true,
-    cwd: true,
-    modelSelection: true,
-    permissionMode: true,
-    debug: true,
-    usage: false,
-    sandbox: true,
-    approval: true,
-  },
-  claude: {
-    nonInteractive: true,
-    jsonOutput: true,
-    jsonlOutput: true,
-    schemaOutput: true,
-    cwd: true,
-    modelSelection: true,
-    permissionMode: true,
-    debug: true,
-    usage: false,
-    sandbox: false,
-    approval: false,
-  },
-};
+const DEFAULT_CAPABILITIES: Readonly<Record<AgentName, ProviderCapabilities>> =
+  {
+    mock: {
+      nonInteractive: true,
+      jsonOutput: true,
+      jsonlOutput: true,
+      schemaOutput: true,
+      cwd: true,
+      modelSelection: true,
+      permissionMode: true,
+      debug: true,
+      usage: true,
+      sandbox: true,
+      approval: true,
+    },
+    codex: {
+      nonInteractive: true,
+      jsonOutput: true,
+      jsonlOutput: true,
+      schemaOutput: true,
+      cwd: true,
+      modelSelection: true,
+      permissionMode: true,
+      debug: true,
+      usage: false,
+      sandbox: true,
+      approval: true,
+    },
+    claude: {
+      nonInteractive: true,
+      jsonOutput: true,
+      jsonlOutput: true,
+      schemaOutput: true,
+      cwd: true,
+      modelSelection: true,
+      permissionMode: true,
+      debug: true,
+      usage: false,
+      sandbox: false,
+      approval: false,
+    },
+    gemini: {
+      nonInteractive: true,
+      jsonOutput: true,
+      jsonlOutput: true,
+      schemaOutput: true,
+      cwd: true,
+      modelSelection: true,
+      permissionMode: false,
+      debug: false,
+      usage: false,
+      sandbox: false,
+      approval: false,
+    },
+  };
 
 export class ProviderRegistry {
   private readonly commandAvailability = new Map<string, Promise<boolean>>();
@@ -131,7 +143,7 @@ export class ProviderRegistry {
 
   capabilitiesFor(provider: ProviderConfig): ProviderCapabilities {
     return mergeCapabilities(
-      DEFAULT_CAPABILITIES[provider.type],
+      DEFAULT_CAPABILITIES[provider.agent],
       provider.capabilityOverrides,
     );
   }
@@ -194,7 +206,7 @@ export class ProviderRegistry {
 
     return {
       provider: provider.name,
-      type: provider.type,
+      agent: provider.agent,
       command: provider.command,
       available: enabled && commandAvailable,
       authenticated,
@@ -214,10 +226,6 @@ export class ProviderRegistry {
   ): Promise<boolean> {
     if (provider.available !== undefined) {
       return provider.available;
-    }
-
-    if (provider.type === 'mock') {
-      return true;
     }
 
     if (options.checkCommandAvailability === false) {

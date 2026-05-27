@@ -189,7 +189,7 @@ export function registerToolCommand(program: Command): void {
 
             return {
               provider: readiness.provider,
-              type: readiness.type,
+              agent: readiness.agent,
               command: readiness.command,
               available: readiness.available,
               authenticated: readiness.authenticated,

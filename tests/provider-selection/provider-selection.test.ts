@@ -17,12 +17,12 @@ describe('AdapterManager provider selection', () => {
     const config = normalizeConfig({
       providers: {
         primary: {
-          type: 'mock',
+          agent: 'mock',
           model: 'first',
           available: false,
         },
         secondary: {
-          type: 'mock',
+          agent: 'mock',
           model: 'second',
           scenario: 'success_no_change',
         },
@@ -64,12 +64,12 @@ describe('AdapterManager provider selection', () => {
     const config = normalizeConfig({
       providers: {
         schema: {
-          type: 'mock',
+          agent: 'mock',
           model: 'schema-model',
           scenario: 'schema_failure',
         },
         secondary: {
-          type: 'mock',
+          agent: 'mock',
           model: 'second',
           scenario: 'success_with_change',
         },
@@ -107,11 +107,11 @@ describe('AdapterManager provider selection', () => {
     const config = normalizeConfig({
       providers: {
         allowed: {
-          type: 'mock',
+          agent: 'mock',
           model: 'allowed-model',
         },
         disallowed: {
-          type: 'mock',
+          agent: 'mock',
           model: 'disallowed-model',
         },
       },
@@ -150,7 +150,7 @@ describe('AdapterManager provider selection', () => {
     const config = normalizeConfig({
       providers: {
         disabled: {
-          type: 'mock',
+          agent: 'mock',
           enabled: false,
         },
       },

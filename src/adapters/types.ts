@@ -1,4 +1,4 @@
-import type { ProviderConfig, ProviderType } from '../config/config-loader.js';
+import type { AgentName, ProviderConfig } from '../config/config-loader.js';
 import type { AgentRunRequest, AgentRunResult } from '../core/types.js';
 
 export interface AgentInvocation {
@@ -11,7 +11,6 @@ export interface AgentInvocation {
 }
 
 export interface AgentAdapter {
-  readonly providerType: ProviderType;
   buildInvocation(
     request: AgentRunRequest,
     provider: ProviderConfig,
@@ -25,7 +24,7 @@ export interface AgentAdapter {
 
 export interface AdapterSmokeTestResult {
   readonly provider: string;
-  readonly type: ProviderType;
+  readonly agent: AgentName;
   readonly command: string;
   readonly status: 'passed' | 'failed';
   readonly message?: string;
