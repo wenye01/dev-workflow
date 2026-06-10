@@ -95,6 +95,34 @@ describe('DecisionEngine', () => {
     expect(contractGap.failure_classification).toBe('contract_gap');
   });
 
+  it('stops with fix_budget_exceeded when fix rounds are exhausted', () => {
+    const result = new DecisionEngine().decide({
+      evaluatorReportRef,
+      evaluatorReport: report({
+        overall: 'fail',
+        failures: [
+          {
+            ref: 'failure-tests',
+            criterion: 'criterion-single-unit',
+            description: 'Tests still failing.',
+            classification: 'test_failure',
+            severity: 'must',
+            auto_fixable: true,
+            evidence: ['ev-tests'],
+          },
+        ],
+      }),
+      fixRound: 1,
+      maxFixRounds: 1,
+      evaluatorAttempt: 0,
+      maxEvaluatorRetries: 1,
+    });
+
+    expect(result.decision).toBe('stop');
+    expect(result.reason_code).toBe('fix_budget_exceeded');
+    expect(result.next_pipeline).toBeNull();
+  });
+
   it('re-evaluates insufficient evidence only while retry budget remains', () => {
     const engine = new DecisionEngine();
     const input = {

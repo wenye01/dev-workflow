@@ -11,14 +11,9 @@ import {
   PlannerPipeline,
   PlannerPipelineError,
 } from '../../planner/planner-pipeline.js';
-import {
-  GeneratorPipeline,
-  GeneratorPipelineError,
-} from '../../generator/generator-pipeline.js';
-import {
-  EvaluatorPipeline,
-  EvaluatorPipelineError,
-} from '../../evaluator/evaluator-pipeline.js';
+import { GeneratorPipelineError } from '../../generator/generator-pipeline.js';
+import { EvaluatorPipelineError } from '../../evaluator/evaluator-pipeline.js';
+import { Orchestrator, OrchestratorError } from '../../core/orchestrator.js';
 import { ProjectIndexError } from '../../project-index/util.js';
 import { Finalizer } from '../../reporting/finalizer.js';
 import { SchemaValidationError } from '../../schemas/validator.js';
@@ -63,19 +58,14 @@ export function registerRunCommand(program: Command): void {
               taskPath: options.task,
               context: contextResult,
             });
-            const generatorResult = await new GeneratorPipeline().build({
+            const orchestratorResult = await new Orchestrator().runUnit({
               repoRoot: contextResult.repoRoot,
               runId: contextResult.runId,
               context: contextResult,
               planner: plannerResult,
             });
-            const evaluatorResult = await new EvaluatorPipeline().build({
-              repoRoot: contextResult.repoRoot,
-              runId: contextResult.runId,
-              context: contextResult,
-              planner: plannerResult,
-              generator: generatorResult,
-            });
+            const generatorResult = orchestratorResult.generator;
+            const evaluatorResult = orchestratorResult.evaluator;
             const finalizerResult = await new Finalizer().complete({
               repoRoot: contextResult.repoRoot,
               runId: contextResult.runId,
@@ -83,6 +73,8 @@ export function registerRunCommand(program: Command): void {
               planner: plannerResult,
               generator: generatorResult,
               evaluator: evaluatorResult,
+              fixLoops: orchestratorResult.fixRounds,
+              commitsCreated: orchestratorResult.commitsCreated,
             });
 
             console.log(
@@ -129,6 +121,8 @@ export function registerRunCommand(program: Command): void {
                     changed_files: generatorResult.changedFiles,
                     commit: generatorResult.commitRef ?? null,
                     decision: evaluatorResult.decision,
+                    fix_rounds: orchestratorResult.fixRounds,
+                    evaluator_attempts: orchestratorResult.evaluatorAttempts,
                     verification_results: evaluatorResult.verificationResults,
                   },
                   resume_from: finalizerResult.resumeFrom,
@@ -216,6 +210,7 @@ function codeForError(error: unknown): string {
     error instanceof PlannerPipelineError ||
     error instanceof GeneratorPipelineError ||
     error instanceof EvaluatorPipelineError ||
+    error instanceof OrchestratorError ||
     error instanceof ProjectIndexError
   ) {
     return error.code;
@@ -242,6 +237,10 @@ function classificationForError(error: unknown): string {
   }
 
   if (error instanceof EvaluatorPipelineError) {
+    return error.classification;
+  }
+
+  if (error instanceof OrchestratorError) {
     return error.classification;
   }
 

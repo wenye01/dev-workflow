@@ -17,6 +17,9 @@ import type { ContextBuilderResult } from '../context/context-builder.js';
 import { SchemaRegistry } from '../schemas/registry.js';
 import { parseJsonObject } from '../schemas/validator.js';
 
+const MAX_FIX_ROUNDS = 1;
+const MAX_EVALUATOR_RETRIES = 1;
+
 export interface PlannerPipelineOptions {
   readonly repoRoot: string;
   readonly runId: string;
@@ -34,6 +37,8 @@ export interface PlannerPipelineResult {
   readonly acceptanceContractRef: ArtifactRef;
   readonly unitId: UnitId;
   readonly batchId: string;
+  readonly maxFixRounds: number;
+  readonly maxEvaluatorRetries: number;
 }
 
 export class PlannerPipelineError extends Error {
@@ -277,8 +282,8 @@ export class PlannerPipeline {
         budgets: {
           max_batches: 1,
           max_units: 1,
-          max_fix_rounds: 1,
-          max_evaluator_retries: 1,
+          max_fix_rounds: MAX_FIX_ROUNDS,
+          max_evaluator_retries: MAX_EVALUATOR_RETRIES,
         },
         counters: {
           cli_processes_started: 0,
@@ -345,6 +350,8 @@ export class PlannerPipeline {
       acceptanceContractRef,
       unitId,
       batchId,
+      maxFixRounds: plannerUnitMaxFixRounds(plannerPackagePayload),
+      maxEvaluatorRetries: MAX_EVALUATOR_RETRIES,
     };
   }
 
@@ -485,7 +492,7 @@ function buildPlannerPackagePayload(options: {
         recommended_generators: ['generator.implementer'],
         recommended_evaluators: ['evaluator.contract_checker'],
         risk_level: 'medium',
-        max_fix_rounds: 1,
+        max_fix_rounds: MAX_FIX_ROUNDS,
       },
     ],
     batches: [
@@ -530,6 +537,18 @@ function buildPlannerPackagePayload(options: {
     },
     risks: [],
   };
+}
+
+function plannerUnitMaxFixRounds(payload: Record<string, unknown>): number {
+  const units = Array.isArray(payload.units) ? payload.units : [];
+  const first = units[0];
+  const value =
+    first && typeof first === 'object'
+      ? (first as Record<string, unknown>).max_fix_rounds
+      : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : MAX_FIX_ROUNDS;
 }
 
 function selectedAllowedPaths(

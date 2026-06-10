@@ -31,6 +31,8 @@ export interface FinalizerInput {
   readonly planner: PlannerPipelineResult;
   readonly generator: GeneratorPipelineResult;
   readonly evaluator: EvaluatorPipelineResult;
+  readonly fixLoops?: number;
+  readonly commitsCreated?: number;
 }
 
 export interface FinalizerResult {
@@ -253,9 +255,10 @@ export class Finalizer {
       },
       counters: {
         cli_processes_started: 0,
-        commits_created: input.generator.commitRef ? 1 : 0,
+        commits_created:
+          input.commitsCreated ?? (input.generator.commitRef ? 1 : 0),
         schema_failures: 0,
-        fix_loops: input.generator.mode === 'fix' ? 1 : 0,
+        fix_loops: input.fixLoops ?? (input.generator.mode === 'fix' ? 1 : 0),
       },
       stop_reason: null,
     });
@@ -327,9 +330,10 @@ export class Finalizer {
       },
       counters: {
         cli_processes_started: 0,
-        commits_created: input.generator.commitRef ? 1 : 0,
+        commits_created:
+          input.commitsCreated ?? (input.generator.commitRef ? 1 : 0),
         schema_failures: 0,
-        fix_loops: input.generator.mode === 'fix' ? 1 : 0,
+        fix_loops: input.fixLoops ?? (input.generator.mode === 'fix' ? 1 : 0),
       },
       stop_reason: String(
         decisionPayload.reason_code ?? input.evaluator.decision,

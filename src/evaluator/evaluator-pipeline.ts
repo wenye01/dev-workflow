@@ -39,6 +39,8 @@ export interface EvaluatorPipelineOptions {
   readonly generator: GeneratorPipelineResult;
   readonly attempt?: number;
   readonly maxEvaluatorRetries?: number;
+  readonly fixRound?: number;
+  readonly maxFixRounds?: number;
 }
 
 export interface EvaluatorPipelineResult {
@@ -52,6 +54,7 @@ export interface EvaluatorPipelineResult {
   readonly unitStateRef: ArtifactRef;
   readonly decision: 'pass' | 'fix' | 're_evaluate' | 'stop';
   readonly verificationResults: readonly Record<string, unknown>[];
+  readonly failures: readonly Record<string, unknown>[];
 }
 
 export class EvaluatorPipelineError extends Error {
@@ -87,7 +90,9 @@ export class EvaluatorPipeline {
     const unitId = options.planner.unitId;
     const attempt = options.attempt ?? 0;
     const maxEvaluatorRetries = options.maxEvaluatorRetries ?? 1;
-    const fixRound = options.generator.mode === 'fix' ? 1 : 0;
+    const fixRound =
+      options.fixRound ?? (options.generator.mode === 'fix' ? 1 : 0);
+    const maxFixRounds = options.maxFixRounds ?? 1;
     const selectedProjectContext = await readContextPayload(
       options.repoRoot,
       options.context.outputs.selectedProjectContext,
@@ -311,7 +316,7 @@ export class EvaluatorPipeline {
       evaluatorReportRef,
       evaluatorReport: evaluatorReportPayload,
       fixRound,
-      maxFixRounds: 1,
+      maxFixRounds,
       evaluatorAttempt: attempt,
       maxEvaluatorRetries,
     });
@@ -376,6 +381,9 @@ export class EvaluatorPipeline {
       unitStateRef,
       decision: decision.decision,
       verificationResults,
+      failures: Array.isArray(evaluatorReportPayload.failures)
+        ? evaluatorReportPayload.failures.filter(isRecord)
+        : [],
     };
   }
 
