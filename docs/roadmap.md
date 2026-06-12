@@ -5,11 +5,15 @@
 设计思想来源：
 
 - [Scaling Managed Agents: Decoupling the brain from the hands](https://www.anthropic.com/engineering/managed-agents)
-  —— 把"脑（Claude + harness）/ 手（sandbox + tools）/ 会话（事件日志）"解耦成稳定接口；sandbox 是可丢弃的 cattle；session 是 context 之外的持久对象。
 - [Harness design for long-running application development](https://www.anthropic.com/engineering/harness-design-long-running-apps)
+
+  —— 把"脑（Claude + harness）/ 手（sandbox + tools）/ 会话（事件日志）"解耦成稳定接口；sandbox 是可丢弃的 cattle；session 是 context 之外的持久对象。
+
   —— planner / generator / evaluator 三角色；GAN 式生成器↔评估器迭代；契约协商；上下文重置 + handoff 交接。
 
-总目标：只规划 **planner / generator / evaluator** 三个顶层角色，每个角色下挂的"具体 agent"由编排（路由 + 配置）动态决定。
+当前战术目标：先规划 **planner / generator / evaluator** 三个顶层角色，每个角色下挂的"具体 agent"由编排（路由 + 配置）动态决定。
+
+长期方向：agentflow 应演进为一个可恢复、可观测、可并发的 Dynamic Workflow Runtime；Planner / Generator / Evaluator 是内置 recipe，而不是唯一编排模型。详见 [dynamic-workflow-direction.md](./dynamic-workflow-direction.md)。
 
 ---
 
