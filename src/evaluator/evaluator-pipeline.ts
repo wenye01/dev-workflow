@@ -19,13 +19,25 @@ import {
   unitStatePath,
 } from '../artifacts/paths.js';
 import { loadAgentflowConfig } from '../config/config-loader.js';
-import { DecisionEngine } from '../core/decision-engine.js';
+import {
+  DecisionEngine,
+  type DecisionEngineResult,
+} from '../core/decision-engine.js';
 import type { ArtifactRef, CommitRef } from '../core/types.js';
 import type { ContextBuilderResult } from '../context/context-builder.js';
 import type { GeneratorPipelineResult } from '../generator/generator-pipeline.js';
 import type { PlannerPipelineResult } from '../planner/planner-pipeline.js';
+import {
+  DEFAULT_MAX_EVALUATOR_RETRIES,
+  DEFAULT_MAX_FIX_ROUNDS,
+  normalizeBudget,
+} from '../core/budgets.js';
 import { SchemaRegistry } from '../schemas/registry.js';
-import { isRecord, parseJsonObject } from '../schemas/validator.js';
+import {
+  isRecord,
+  parseJsonObject,
+  SchemaValidationError,
+} from '../schemas/validator.js';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -41,6 +53,8 @@ export interface EvaluatorPipelineOptions {
   readonly maxEvaluatorRetries?: number;
   readonly fixRound?: number;
   readonly maxFixRounds?: number;
+  readonly onCliProcessStarted?: () => void;
+  readonly onSchemaFailure?: () => void;
 }
 
 export interface EvaluatorPipelineResult {
@@ -52,6 +66,7 @@ export interface EvaluatorPipelineResult {
   readonly evaluatorReportRef: ArtifactRef;
   readonly unitDecisionRef: ArtifactRef;
   readonly unitStateRef: ArtifactRef;
+  readonly unitDecision: DecisionEngineResult;
   readonly decision: 'pass' | 'fix' | 're_evaluate' | 'stop';
   readonly verificationResults: readonly Record<string, unknown>[];
   readonly failures: readonly Record<string, unknown>[];
@@ -89,10 +104,16 @@ export class EvaluatorPipeline {
   ): Promise<EvaluatorPipelineResult> {
     const unitId = options.planner.unitId;
     const attempt = options.attempt ?? 0;
-    const maxEvaluatorRetries = options.maxEvaluatorRetries ?? 1;
+    const maxEvaluatorRetries = normalizeBudget(
+      options.maxEvaluatorRetries,
+      DEFAULT_MAX_EVALUATOR_RETRIES,
+    );
     const fixRound =
       options.fixRound ?? (options.generator.mode === 'fix' ? 1 : 0);
-    const maxFixRounds = options.maxFixRounds ?? 1;
+    const maxFixRounds = normalizeBudget(
+      options.maxFixRounds,
+      DEFAULT_MAX_FIX_ROUNDS,
+    );
     const selectedProjectContext = await readContextPayload(
       options.repoRoot,
       options.context.outputs.selectedProjectContext,
@@ -271,6 +292,7 @@ export class EvaluatorPipeline {
       options.repoRoot,
       agentResult.outputArtifact,
       this.registry,
+      options.onSchemaFailure,
     );
     await store.writeFromPayload({
       payloadType: 'role_output',
@@ -379,6 +401,7 @@ export class EvaluatorPipeline {
       evaluatorReportRef,
       unitDecisionRef,
       unitStateRef,
+      unitDecision: decision,
       decision: decision.decision,
       verificationResults,
       failures: Array.isArray(evaluatorReportPayload.failures)
@@ -394,6 +417,7 @@ export class EvaluatorPipeline {
     readonly attempt: number;
     readonly outputArtifact: ArtifactRef;
     readonly inputArtifacts: readonly ArtifactRef[];
+    readonly onCliProcessStarted?: () => void;
   }) {
     const config = await loadAgentflowConfig({
       configPath: options.configPath,
@@ -401,6 +425,7 @@ export class EvaluatorPipeline {
     });
     const manager = new AdapterManager(config, {
       checkCommandAvailability: false,
+      onCliProcessStarted: options.onCliProcessStarted,
     });
     try {
       return await manager.runRole({
@@ -793,13 +818,27 @@ async function readRoleOutputPayload(
   repoRoot: string,
   ref: ArtifactRef,
   registry: SchemaRegistry,
+  onSchemaFailure?: () => void,
 ): Promise<Record<string, unknown>> {
-  const raw = parseJsonObject(
-    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
-  );
+  let raw: Record<string, unknown>;
+  try {
+    raw = parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      onSchemaFailure?.();
+    }
+    throw error;
+  }
   const payload =
     isRecord(raw) && raw.artifact_type === 'role_output' ? raw.payload : raw;
-  registry.assertLlmPayload('role_output', payload);
+  try {
+    registry.assertLlmPayload('role_output', payload);
+  } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      onSchemaFailure?.();
+    }
+    throw error;
+  }
   return payload as Record<string, unknown>;
 }
 

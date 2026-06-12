@@ -82,9 +82,55 @@ describe('loadAgentflowConfig', () => {
       { provider: 'codex' },
     ]);
   });
+
+  it('parses budget values from camelCase and snake_case config', async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), 'agentflow-config-budgets-'));
+    const configPath = path.join(repo, 'agentflow.config.json');
+    await writeJson(configPath, {
+      budgets: {
+        max_fix_rounds: 2,
+        maxEvaluatorRetries: 3,
+      },
+    });
+
+    const config = await loadAgentflowConfig({
+      configPath,
+      globalConfigPath: false,
+    });
+
+    expect(config.budgets.maxFixRounds).toBe(2);
+    expect(config.budgets.maxEvaluatorRetries).toBe(3);
+  });
+
+  it('throws when budgets contain invalid values', async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), 'agentflow-config-invalid-budgets-'));
+    const configPath = path.join(repo, 'agentflow.config.yaml');
+    await writeText(
+      configPath,
+      [
+        'budgets:',
+        '  max_fix_rounds: not-a-number',
+        '  max_evaluator_retries: 2',
+      ].join('\n'),
+    );
+
+    await expect(
+      loadAgentflowConfig({
+        configPath,
+        globalConfigPath: false,
+      }),
+    ).rejects.toMatchObject({
+      code: 'AGENTFLOW_CONFIG_INVALID_BUDGET',
+    });
+  });
 });
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function writeText(filePath: string, value: string): Promise<void> {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${value}\n`, 'utf8');
 }

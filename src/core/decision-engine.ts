@@ -29,10 +29,27 @@ export interface DecisionEngineResult {
   readonly evidence_refs: readonly string[];
   readonly rule_triggered: string;
   readonly rejected_paths: readonly UnitDecision[];
-  readonly next_pipeline: Record<string, unknown> | null;
+  readonly next_pipeline: DecisionEngineNextPipeline | null;
   readonly fix_round: number;
   readonly max_fix_rounds: number;
 }
+
+export interface NextPipelineEvaluatorReevaluate {
+  readonly module: 'evaluator';
+  readonly mode: 're_evaluate';
+  readonly attempt: number;
+}
+
+export interface NextPipelineGeneratorFix {
+  readonly module: 'generator';
+  readonly mode: 'fix';
+  readonly fix_round: number;
+  readonly target_failures: readonly string[];
+}
+
+export type DecisionEngineNextPipeline =
+  | NextPipelineEvaluatorReevaluate
+  | NextPipelineGeneratorFix;
 
 export class DecisionEngine {
   decide(input: DecisionEngineInput): DecisionEngineResult {

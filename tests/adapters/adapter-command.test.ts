@@ -89,13 +89,13 @@ describe('agent adapters', () => {
 
   it('writes structured wrapper artifacts back to the requested artifact path', async () => {
     const cwd = await mkdtemp(path.join(tmpdir(), 'agentflow-wrapper-run-'));
-    const wrapperPath = await writeFakeWrapper(cwd);
+    const fakeWrapper = await writeFakeWrapper(cwd);
     const outputArtifact = parseArtifactRef('.agentflow/roles/out.json');
     const provider = providerConfig({
       name: 'codex-default',
       agent: 'codex',
       command: 'codex',
-      wrapperPath,
+      ...fakeWrapper,
     });
 
     const result = await new CodeagentWrapperClient().run(
@@ -116,7 +116,11 @@ describe('agent adapters', () => {
   });
 });
 
-async function writeFakeWrapper(dir: string): Promise<string> {
+async function writeFakeWrapper(
+  dir: string,
+): Promise<
+  Pick<ProviderConfig, 'wrapperPath'> & Partial<Pick<ProviderConfig, 'raw'>>
+> {
   const modulePath = path.join(dir, 'fake-wrapper.mjs');
   const script = `#!/usr/bin/env node
 let stdin = '';
@@ -144,17 +148,15 @@ process.stdin.on('end', () => {
   await writeFile(modulePath, script, 'utf8');
 
   if (process.platform === 'win32') {
-    const cmdPath = path.join(dir, 'fake-wrapper.cmd');
-    await writeFile(
-      cmdPath,
-      `@echo off\r\n"${process.execPath}" "%~dp0fake-wrapper.mjs" %*\r\n`,
-      'utf8',
-    );
-    return cmdPath;
+    // Node 22+ blocks spawn('.cmd') without shell; invoke the script via node directly.
+    return {
+      wrapperPath: process.execPath,
+      raw: { wrapper_extra_args: [modulePath] },
+    };
   }
 
   await chmod(modulePath, 0o755);
-  return modulePath;
+  return { wrapperPath: modulePath };
 }
 
 function providerConfig(

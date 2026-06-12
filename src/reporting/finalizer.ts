@@ -31,6 +31,16 @@ export interface FinalizerInput {
   readonly planner: PlannerPipelineResult;
   readonly generator: GeneratorPipelineResult;
   readonly evaluator: EvaluatorPipelineResult;
+  readonly budgets?: {
+    readonly maxFixRounds: number;
+    readonly maxEvaluatorRetries: number;
+  };
+  readonly counters?: {
+    readonly fixLoops?: number;
+    readonly commitsCreated?: number;
+    readonly cliProcessesStarted?: number;
+    readonly schemaFailures?: number;
+  };
   readonly fixLoops?: number;
   readonly commitsCreated?: number;
 }
@@ -247,18 +257,20 @@ export class Finalizer {
       last_stable_state: 'finalized',
       resume_from: null,
       config_snapshot_ref: null,
-      budgets: {
-        max_batches: 1,
-        max_units: 1,
-        max_fix_rounds: 1,
-        max_evaluator_retries: 1,
-      },
+      budgets: resolvedRunStateBudgets(input),
       counters: {
-        cli_processes_started: 0,
+        cli_processes_started:
+          input.counters?.cliProcessesStarted ??
+          0,
         commits_created:
-          input.commitsCreated ?? (input.generator.commitRef ? 1 : 0),
-        schema_failures: 0,
-        fix_loops: input.fixLoops ?? (input.generator.mode === 'fix' ? 1 : 0),
+          input.counters?.commitsCreated ??
+          input.commitsCreated ??
+          (input.generator.commitRef ? 1 : 0),
+        schema_failures: input.counters?.schemaFailures ?? 0,
+        fix_loops:
+          input.counters?.fixLoops ??
+          input.fixLoops ??
+          (input.generator.mode === 'fix' ? 1 : 0),
       },
       stop_reason: null,
     });
@@ -322,18 +334,20 @@ export class Finalizer {
       last_stable_state: 'decision_ready',
       resume_from: input.evaluator.decision,
       config_snapshot_ref: null,
-      budgets: {
-        max_batches: 1,
-        max_units: 1,
-        max_fix_rounds: 1,
-        max_evaluator_retries: 1,
-      },
+      budgets: resolvedRunStateBudgets(input),
       counters: {
-        cli_processes_started: 0,
+        cli_processes_started:
+          input.counters?.cliProcessesStarted ??
+          0,
         commits_created:
-          input.commitsCreated ?? (input.generator.commitRef ? 1 : 0),
-        schema_failures: 0,
-        fix_loops: input.fixLoops ?? (input.generator.mode === 'fix' ? 1 : 0),
+          input.counters?.commitsCreated ??
+          input.commitsCreated ??
+          (input.generator.commitRef ? 1 : 0),
+        schema_failures: input.counters?.schemaFailures ?? 0,
+        fix_loops:
+          input.counters?.fixLoops ??
+          input.fixLoops ??
+          (input.generator.mode === 'fix' ? 1 : 0),
       },
       stop_reason: String(
         decisionPayload.reason_code ?? input.evaluator.decision,
@@ -734,6 +748,26 @@ function recentFailure(
 
 function projectIndexStatus(index: ArtifactIndex): string {
   return latestProjectIndexManifestRef(index) ? 'available' : 'unknown';
+}
+
+function resolvedRunStateBudgets(input: FinalizerInput): {
+  max_batches: number;
+  max_units: number;
+  max_fix_rounds: number;
+  max_evaluator_retries: number;
+} {
+  return {
+    max_batches: 1,
+    max_units: 1,
+    max_fix_rounds:
+      input.budgets?.maxFixRounds ??
+      input.planner.maxFixRounds ??
+      1,
+    max_evaluator_retries:
+      input.budgets?.maxEvaluatorRetries ??
+      input.planner.maxEvaluatorRetries ??
+      1,
+  };
 }
 
 function inferResumePoint(index: ArtifactIndex, runId: string): string | null {

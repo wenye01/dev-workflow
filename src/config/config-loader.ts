@@ -65,11 +65,17 @@ export interface RoleConfig {
   readonly raw: Readonly<Record<string, unknown>>;
 }
 
+export interface BudgetsConfig {
+  readonly maxFixRounds?: number;
+  readonly maxEvaluatorRetries?: number;
+}
+
 export interface AgentflowConfig {
   readonly filePath: string;
   readonly sources: readonly string[];
   readonly providers: Readonly<Record<string, ProviderConfig>>;
   readonly roles: Readonly<Record<string, RoleConfig>>;
+  readonly budgets: Readonly<BudgetsConfig>;
   readonly raw: Readonly<Record<string, unknown>>;
 }
 
@@ -199,6 +205,7 @@ export function normalizeConfig(
     sources,
     providers: normalizeProviders(readRecord(raw, 'providers') ?? {}),
     roles: normalizeRoles(readRecord(raw, 'roles') ?? {}),
+    budgets: normalizeBudgets(readRecord(raw, 'budgets') ?? {}),
     raw,
   };
 }
@@ -346,6 +353,19 @@ function normalizeRoles(
       ];
     }),
   );
+}
+
+function normalizeBudgets(
+  raw: Readonly<Record<string, unknown>>,
+): Readonly<BudgetsConfig> {
+  return {
+    maxFixRounds: readBudgetInteger(raw, 'maxFixRounds', 'max_fix_rounds'),
+    maxEvaluatorRetries: readBudgetInteger(
+      raw,
+      'maxEvaluatorRetries',
+      'max_evaluator_retries',
+    ),
+  };
 }
 
 function normalizeProviderCandidates(
@@ -511,6 +531,34 @@ function readNumber(
   }
 
   return value;
+}
+
+function readBudgetInteger(
+  raw: Readonly<Record<string, unknown>>,
+  camelCaseKey: string,
+  snakeCaseKey: string,
+): number | undefined {
+  const hasSnake = Object.hasOwn(raw, snakeCaseKey);
+  const hasCamel = Object.hasOwn(raw, camelCaseKey);
+  if (!hasSnake && !hasCamel) {
+    return undefined;
+  }
+
+  const key = hasSnake ? snakeCaseKey : camelCaseKey;
+  const value = raw[key];
+  if (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
+  ) {
+    return value;
+  }
+
+  throw new ConfigError({
+    code: 'AGENTFLOW_CONFIG_INVALID_BUDGET',
+    message: `Invalid budget "${key}" in configuration. Expecting a non-negative integer.`,
+  });
 }
 
 function readStringArray(

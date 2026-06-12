@@ -113,6 +113,7 @@ M13 真实 Planner ┘        M15 batch/依赖调度 ──> M16 worktree 隔离
 - 新建 `src/core/batch-runner.ts`：按 `batch_schedule` 顺序执行各 batch；batch 内按 `parallel` 与 `dependencies` 做拓扑排序。
 - 文件锁：依据 unit `locks.file_scope` 防止并行 unit 写冲突；冲突则降级串行。
 - 与 M12 orchestrator 组合：batch-runner 调度 unit，orchestrator 跑单 unit 至终态。
+- 复用 M12 抽出的 `RunOrchestrator` 作为单 run/单 unit 执行边界；M15 只在外层增加 batch 遍历、依赖排序和冲突控制。
 
 **验收**：
 - 2+ unit、含依赖关系的 fixture 能按正确顺序执行；无依赖且 scope 不冲突的可并行。

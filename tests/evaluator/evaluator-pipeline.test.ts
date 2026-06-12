@@ -65,11 +65,32 @@ describe('EvaluatorPipeline', () => {
       mode: 'fix',
     });
   });
+
+  it('accepts budgets greater than one from PlannerPipeline options', async () => {
+    const setup = await prepareGeneratedRun('evaluator-higher-budgets', {
+      testScript: 'node -e "process.exit(1)"',
+      maxFixRounds: 2,
+      maxEvaluatorRetries: 2,
+    });
+    const result = await new EvaluatorPipeline().build({
+      ...setup.options,
+      maxFixRounds: 2,
+      maxEvaluatorRetries: 2,
+    });
+
+    expect(result.unitDecision.max_fix_rounds).toBe(2);
+    expect(setup.options.planner.maxEvaluatorRetries).toBe(2);
+    expect(setup.options.planner.maxFixRounds).toBe(2);
+  });
 });
 
 async function prepareGeneratedRun(
   name: string,
-  options: { readonly testScript: string },
+  options: {
+    readonly testScript: string;
+    readonly maxFixRounds?: number;
+    readonly maxEvaluatorRetries?: number;
+  },
 ) {
   const repo = await makeTypeScriptRepo(name, options.testScript);
   const taskPath = path.join(repo, 'TASK.md');
@@ -94,6 +115,8 @@ async function prepareGeneratedRun(
     runId: context.runId,
     taskPath,
     context,
+    maxFixRounds: options.maxFixRounds,
+    maxEvaluatorRetries: options.maxEvaluatorRetries,
   });
   const generator = await new GeneratorPipeline().build({
     repoRoot: context.repoRoot,

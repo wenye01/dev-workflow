@@ -35,6 +35,7 @@ export interface AdapterManagerOptions {
   readonly wrapperClient?: AgentAdapter;
   readonly activeProcessCounts?: ReadonlyMap<string, number>;
   readonly checkCommandAvailability?: boolean;
+  readonly onCliProcessStarted?: () => void;
 }
 
 export class AdapterSelectionError extends Error {
@@ -148,6 +149,7 @@ export class AdapterManager {
       }
 
       const request = buildRunRequest(options, provider, candidateModel);
+      this.options.onCliProcessStarted?.();
       const result = await this.wrapperClient.run(request, provider);
       const decorated = decorateResult({
         result,

@@ -3,19 +3,13 @@ import path from 'node:path';
 
 import { ArtifactStore } from '../../artifacts/artifact-store.js';
 import { artifactPath } from '../../artifacts/paths.js';
-import {
-  ContextBuilder,
-  ContextBuilderError,
-} from '../../context/context-builder.js';
-import {
-  PlannerPipeline,
-  PlannerPipelineError,
-} from '../../planner/planner-pipeline.js';
+import { ContextBuilderError } from '../../context/context-builder.js';
+import { PlannerPipelineError } from '../../planner/planner-pipeline.js';
 import { GeneratorPipelineError } from '../../generator/generator-pipeline.js';
 import { EvaluatorPipelineError } from '../../evaluator/evaluator-pipeline.js';
-import { Orchestrator, OrchestratorError } from '../../core/orchestrator.js';
+import { OrchestratorError } from '../../core/orchestrator.js';
+import { RunOrchestrator } from '../../core/run-orchestrator.js';
 import { ProjectIndexError } from '../../project-index/util.js';
-import { Finalizer } from '../../reporting/finalizer.js';
 import { SchemaValidationError } from '../../schemas/validator.js';
 
 export function registerRunCommand(program: Command): void {
@@ -34,6 +28,16 @@ export function registerRunCommand(program: Command): void {
       'Rebuild Project Index before context build',
     )
     .option('--run-id <id>', 'Explicit run id for generated context artifacts')
+    .option(
+      '--max-fix-rounds <n>',
+      'Maximum generator retry rounds for auto-fixes',
+      parseBudgetOption,
+    )
+    .option(
+      '--max-evaluator-retries <n>',
+      'Maximum evaluator re-evaluate retries for insufficient evidence',
+      parseBudgetOption,
+    )
     .action(
       async (options: {
         readonly repo: string;
@@ -41,115 +45,34 @@ export function registerRunCommand(program: Command): void {
         readonly projectIndexDir: string;
         readonly forceProjectIndex?: boolean;
         readonly runId?: string;
+        readonly maxFixRounds?: number;
+        readonly maxEvaluatorRetries?: number;
       }) => {
+        let stopReportRepo = options.repo;
+        let stopReportRunId = options.runId;
+
         try {
-          const contextResult = await new ContextBuilder().build({
-            repoPath: options.repo,
-            taskPath: options.task,
+          const result = await new RunOrchestrator().run({
+            repo: options.repo,
+            task: options.task,
             projectIndexDir: options.projectIndexDir,
-            forceProjectIndex: options.forceProjectIndex ?? false,
+            forceProjectIndex: options.forceProjectIndex,
             runId: options.runId,
+            maxFixRounds: options.maxFixRounds,
+            maxEvaluatorRetries: options.maxEvaluatorRetries,
+            onContextBuilt: (context) => {
+              stopReportRepo = context.repoRoot;
+              stopReportRunId = context.runId;
+            },
           });
 
-          try {
-            const plannerResult = await new PlannerPipeline().build({
-              repoRoot: contextResult.repoRoot,
-              runId: contextResult.runId,
-              taskPath: options.task,
-              context: contextResult,
-            });
-            const orchestratorResult = await new Orchestrator().runUnit({
-              repoRoot: contextResult.repoRoot,
-              runId: contextResult.runId,
-              context: contextResult,
-              planner: plannerResult,
-            });
-            const generatorResult = orchestratorResult.generator;
-            const evaluatorResult = orchestratorResult.evaluator;
-            const finalizerResult = await new Finalizer().complete({
-              repoRoot: contextResult.repoRoot,
-              runId: contextResult.runId,
-              context: contextResult,
-              planner: plannerResult,
-              generator: generatorResult,
-              evaluator: evaluatorResult,
-              fixLoops: orchestratorResult.fixRounds,
-              commitsCreated: orchestratorResult.commitsCreated,
-            });
-
-            console.log(
-              JSON.stringify(
-                {
-                  status: finalizerResult.status,
-                  run_id: contextResult.runId,
-                  repo: contextResult.repoRoot,
-                  context_status: contextResult.status,
-                  project_index_status: contextResult.projectIndexStatus,
-                  outputs: {
-                    ...contextResult.outputs,
-                    routing_decision: plannerResult.routingDecisionRef,
-                    role_run_requests: plannerResult.roleRunRequestRefs,
-                    planner_package: plannerResult.plannerPackageRef,
-                    batch_schedule: plannerResult.batchScheduleRef,
-                    acceptance_contract: plannerResult.acceptanceContractRef,
-                    run_state: plannerResult.runStateRef,
-                    unit_state: plannerResult.unitStateRef,
-                    generation_input: generatorResult.generationInputRef,
-                    generator_routing_decision:
-                      generatorResult.routingDecisionRef,
-                    generator_role_run_request:
-                      generatorResult.roleRunRequestRef,
-                    generator_role_input: generatorResult.roleInputRef,
-                    generator_role_output: generatorResult.roleOutputRef,
-                    change_package: generatorResult.changePackageRef,
-                    evaluation_input: evaluatorResult.evaluationInputRef,
-                    evaluator_routing_decision:
-                      evaluatorResult.routingDecisionRef,
-                    evaluator_role_run_request:
-                      evaluatorResult.roleRunRequestRef,
-                    evaluator_role_input: evaluatorResult.roleInputRef,
-                    evaluator_role_output: evaluatorResult.roleOutputRef,
-                    evaluator_report: evaluatorResult.evaluatorReportRef,
-                    unit_decision: evaluatorResult.unitDecisionRef,
-                    final_or_stop_report: finalizerResult.reportRef,
-                    final_run_state: finalizerResult.runStateRef,
-                  },
-                  unit: {
-                    unit_id: plannerResult.unitId,
-                    batch_id: plannerResult.batchId,
-                    generator_mode: generatorResult.mode,
-                    changed_files: generatorResult.changedFiles,
-                    commit: generatorResult.commitRef ?? null,
-                    decision: evaluatorResult.decision,
-                    fix_rounds: orchestratorResult.fixRounds,
-                    evaluator_attempts: orchestratorResult.evaluatorAttempts,
-                    verification_results: evaluatorResult.verificationResults,
-                  },
-                  resume_from: finalizerResult.resumeFrom,
-                  cannot_resume_reason:
-                    finalizerResult.cannotResumeReason ?? null,
-                },
-                null,
-                2,
-              ),
-            );
-          } catch (error) {
-            process.exitCode = 2;
-            const stopReportRef = await tryWriteStopReport(
-              contextResult.repoRoot,
-              error,
-              contextResult.runId,
-            );
-            console.error(
-              JSON.stringify(formatRunError(error, stopReportRef), null, 2),
-            );
-          }
+          console.log(JSON.stringify(result.output, null, 2));
         } catch (error) {
           process.exitCode = 2;
           const stopReportRef = await tryWriteStopReport(
-            options.repo,
+            stopReportRepo,
             error,
-            options.runId,
+            stopReportRunId,
           );
           console.error(
             JSON.stringify(formatRunError(error, stopReportRef), null, 2),
@@ -362,4 +285,12 @@ function stopReportPayloadForError(error: unknown): Record<string, unknown> {
       'Run agentflow run again after correcting the problem.',
     ],
   };
+}
+
+function parseBudgetOption(value: string): number {
+  if (!/^[0-9]+$/.test(value)) {
+    throw new Error('Invalid budget value, expecting a non-negative integer.');
+  }
+
+  return Number.parseInt(value, 10);
 }

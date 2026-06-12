@@ -91,7 +91,7 @@
             }
           },
           "risk_level": { "enum": ["low", "medium", "high"] },
-          "max_fix_rounds": { "type": "integer", "minimum": 0, "maximum": 1 }
+          "max_fix_rounds": { "type": "integer", "minimum": 0 }
         }
       }
     },

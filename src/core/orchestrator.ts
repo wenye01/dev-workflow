@@ -8,7 +8,16 @@ import {
 } from '../evaluator/evaluator-pipeline.js';
 import type { ContextBuilderResult } from '../context/context-builder.js';
 import type { PlannerPipelineResult } from '../planner/planner-pipeline.js';
-import type { UnitDecision } from './decision-engine.js';
+import {
+  DEFAULT_MAX_EVALUATOR_RETRIES,
+  DEFAULT_MAX_FIX_ROUNDS,
+  normalizeBudget,
+} from './budgets.js';
+import {
+  type DecisionEngineResult,
+  type NextPipelineGeneratorFix,
+  type UnitDecision,
+} from './decision-engine.js';
 
 export interface OrchestratorOptions {
   readonly repoRoot: string;
@@ -18,6 +27,8 @@ export interface OrchestratorOptions {
   readonly planner: PlannerPipelineResult;
   readonly maxFixRounds?: number;
   readonly maxEvaluatorRetries?: number;
+  readonly onCliProcessStarted?: () => void;
+  readonly onSchemaFailure?: () => void;
 }
 
 export interface OrchestratorResult {
@@ -28,6 +39,16 @@ export interface OrchestratorResult {
   readonly fixRounds: number;
   readonly evaluatorAttempts: number;
   readonly commitsCreated: number;
+  readonly budgets: {
+    readonly maxFixRounds: number;
+    readonly maxEvaluatorRetries: number;
+  };
+  readonly counters: {
+    readonly fixLoops: number;
+    readonly commitsCreated: number;
+    readonly cliProcessesStarted: number;
+    readonly schemaFailures: number;
+  };
 }
 
 export class OrchestratorError extends Error {
@@ -51,9 +72,8 @@ type EvaluatorRunner = Pick<EvaluatorPipeline, 'build'>;
 
 /**
  * Drives a single execution unit to a terminal state by looping the
- * generator and evaluator stages according to the DecisionEngine output
- * surfaced by the evaluator. The loop is bounded by the fix-round and
- * evaluator-retry budgets so it always terminates.
+ * generator and evaluator stages according to the DecisionEngine output.
+ * The loop is bounded by budgets so it always terminates.
  */
 export class Orchestrator {
   constructor(
@@ -62,21 +82,35 @@ export class Orchestrator {
   ) {}
 
   async runUnit(options: OrchestratorOptions): Promise<OrchestratorResult> {
-    const maxFixRounds = nonNegativeInt(
+    const maxFixRounds = normalizeBudget(
       options.maxFixRounds ?? options.planner.maxFixRounds,
-      1,
+      DEFAULT_MAX_FIX_ROUNDS,
     );
-    const maxEvaluatorRetries = nonNegativeInt(
+    const maxEvaluatorRetries = normalizeBudget(
       options.maxEvaluatorRetries ?? options.planner.maxEvaluatorRetries,
-      1,
+      DEFAULT_MAX_EVALUATOR_RETRIES,
     );
     const iterationCap = (maxFixRounds + 1) * (maxEvaluatorRetries + 1) + 2;
 
     let fixRound = 0;
     let attempt = 0;
     let evaluatorAttempts = 0;
-    let commitsCreated = 0;
+    const counters = {
+      fixLoops: 0,
+      commitsCreated: 0,
+      cliProcessesStarted: 0,
+      schemaFailures: 0,
+    };
     let iterations = 0;
+
+    const bumpCliProcesses = () => {
+      counters.cliProcessesStarted += 1;
+      options.onCliProcessStarted?.();
+    };
+    const bumpSchemaFailures = () => {
+      counters.schemaFailures += 1;
+      options.onSchemaFailure?.();
+    };
 
     let generator = await this.generator.build({
       repoRoot: options.repoRoot,
@@ -86,9 +120,11 @@ export class Orchestrator {
       planner: options.planner,
       mode: 'initial',
       previousFailures: [],
+      onCliProcessStarted: bumpCliProcesses,
+      onSchemaFailure: bumpSchemaFailures,
     });
     if (generator.commitRef) {
-      commitsCreated += 1;
+      counters.commitsCreated += 1;
     }
 
     for (;;) {
@@ -106,6 +142,8 @@ export class Orchestrator {
         context: options.context,
         planner: options.planner,
         generator,
+        onCliProcessStarted: bumpCliProcesses,
+        onSchemaFailure: bumpSchemaFailures,
         attempt,
         fixRound,
         maxFixRounds,
@@ -113,7 +151,9 @@ export class Orchestrator {
       });
       evaluatorAttempts += 1;
 
-      const decision = evaluator.decision;
+      const unitDecision = evaluator.unitDecision;
+      assertHasExpectedDecisionShape(unitDecision);
+      const decision = unitDecision.decision;
 
       if (decision === 'pass' || decision === 'stop') {
         return {
@@ -123,37 +163,119 @@ export class Orchestrator {
           evaluator,
           fixRounds: fixRound,
           evaluatorAttempts,
-          commitsCreated,
+          commitsCreated: counters.commitsCreated,
+          budgets: {
+            maxFixRounds,
+            maxEvaluatorRetries,
+          },
+          counters,
         };
       }
 
-      if (decision === 're_evaluate') {
-        attempt += 1;
+      if (!unitDecision.next_pipeline) {
+        throw new OrchestratorError({
+          code: 'AGENTFLOW_ORCHESTRATOR_INVALID_NEXT_PIPELINE',
+          message:
+            'Decision is non-terminal but next_pipeline is null; cannot route to the next stage.',
+          classification: 'orchestrator_routing_failed',
+        });
+      }
+
+      if (unitDecision.next_pipeline.module === 'evaluator') {
+        if (
+          decision !== 're_evaluate' ||
+          unitDecision.next_pipeline.mode !== 're_evaluate'
+        ) {
+          throw new OrchestratorError({
+            code: 'AGENTFLOW_ORCHESTRATOR_DECISION_MISMATCH',
+            message: `Decision "${decision}" is incompatible with next_pipeline ${unitDecision.next_pipeline.module}/${unitDecision.next_pipeline.mode}.`,
+            classification: 'orchestrator_routing_failed',
+          });
+        }
+
+        attempt = normalizeBudget(unitDecision.next_pipeline.attempt, 0);
         continue;
       }
 
-      // decision === 'fix': regenerate against the evaluator's failures,
-      // then reset the evaluator-retry counter for the fresh generation.
-      fixRound += 1;
-      attempt = 0;
-      generator = await this.generator.build({
-        repoRoot: options.repoRoot,
-        runId: options.runId,
-        configPath: options.configPath,
-        context: options.context,
-        planner: options.planner,
-        mode: 'fix',
-        previousFailures: evaluator.failures,
-      });
-      if (generator.commitRef) {
-        commitsCreated += 1;
+      if (
+        unitDecision.next_pipeline.module === 'generator' &&
+        unitDecision.next_pipeline.mode === 'fix'
+      ) {
+        if (
+          decision !== 'fix' ||
+          !isFixNextPipeline(unitDecision.next_pipeline)
+        ) {
+          throw new OrchestratorError({
+            code: 'AGENTFLOW_ORCHESTRATOR_DECISION_MISMATCH',
+            message: `Decision "${decision}" is incompatible with next_pipeline ${unitDecision.next_pipeline.module}/${unitDecision.next_pipeline.mode}.`,
+            classification: 'orchestrator_routing_failed',
+          });
+        }
+
+        const previousFailures = selectFailuresForFix(
+          evaluator.failures,
+          unitDecision.next_pipeline,
+        );
+        fixRound = normalizeBudget(unitDecision.next_pipeline.fix_round, 0);
+        counters.fixLoops = Math.max(counters.fixLoops, fixRound);
+        attempt = 0;
+        generator = await this.generator.build({
+          repoRoot: options.repoRoot,
+          runId: options.runId,
+          configPath: options.configPath,
+          context: options.context,
+          planner: options.planner,
+          mode: 'fix',
+          previousFailures,
+          onCliProcessStarted: bumpCliProcesses,
+          onSchemaFailure: bumpSchemaFailures,
+        });
+        if (generator.commitRef) {
+          counters.commitsCreated += 1;
+        }
+        continue;
       }
+
+      throw new OrchestratorError({
+        code: 'AGENTFLOW_ORCHESTRATOR_INVALID_NEXT_PIPELINE',
+        message: 'Unsupported next_pipeline path.',
+        classification: 'orchestrator_routing_failed',
+      });
     }
   }
 }
 
-function nonNegativeInt(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-    ? Math.floor(value)
-    : fallback;
+function assertHasExpectedDecisionShape(
+  unitDecision: DecisionEngineResult,
+): void {
+  if (unitDecision.decision !== 'pass' && unitDecision.decision !== 'stop') {
+    if (!unitDecision.next_pipeline) {
+      throw new OrchestratorError({
+        code: 'AGENTFLOW_ORCHESTRATOR_INVALID_UNIT_DECISION',
+        message: 'Expected next_pipeline for non-terminal decision.',
+        classification: 'orchestrator_routing_failed',
+      });
+    }
+  }
+}
+
+function isFixNextPipeline(
+  value: DecisionEngineResult['next_pipeline'],
+): value is NextPipelineGeneratorFix {
+  return value !== null && value.mode === 'fix' && value.module === 'generator';
+}
+
+function selectFailuresForFix(
+  failures: readonly Record<string, unknown>[],
+  nextPipeline: NextPipelineGeneratorFix,
+): readonly Record<string, unknown>[] {
+  if (nextPipeline.target_failures.length === 0) {
+    return failures;
+  }
+
+  const targetRefs = new Set(nextPipeline.target_failures);
+  const selected = failures.filter((failure) =>
+    typeof failure.ref === 'string' ? targetRefs.has(failure.ref) : false,
+  );
+  return selected.length > 0 ? selected : failures;
 }

@@ -32,6 +32,8 @@ describe('agentflow CLI', () => {
         '--project-index-dir',
         '--force-project-index',
         '--run-id',
+        '--max-fix-rounds',
+        '--max-evaluator-retries',
       ]),
     );
   });

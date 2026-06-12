@@ -13,18 +13,23 @@ import {
 } from '../artifacts/paths.js';
 import type { ArtifactRef, UnitId } from '../core/types.js';
 import { asRunId, asUnitId } from '../core/types.js';
+import {
+  DEFAULT_MAX_EVALUATOR_RETRIES,
+  DEFAULT_MAX_FIX_ROUNDS,
+  normalizeBudget,
+} from '../core/budgets.js';
 import type { ContextBuilderResult } from '../context/context-builder.js';
 import { SchemaRegistry } from '../schemas/registry.js';
-import { parseJsonObject } from '../schemas/validator.js';
-
-const MAX_FIX_ROUNDS = 1;
-const MAX_EVALUATOR_RETRIES = 1;
+import { parseJsonObject, SchemaValidationError } from '../schemas/validator.js';
 
 export interface PlannerPipelineOptions {
   readonly repoRoot: string;
   readonly runId: string;
   readonly taskPath: string;
   readonly context: ContextBuilderResult;
+  readonly maxFixRounds?: number;
+  readonly maxEvaluatorRetries?: number;
+  readonly onSchemaFailure?: () => void;
 }
 
 export interface PlannerPipelineResult {
@@ -66,6 +71,15 @@ export class PlannerPipeline {
   constructor(private readonly registry = SchemaRegistry.load()) {}
 
   async build(options: PlannerPipelineOptions): Promise<PlannerPipelineResult> {
+    const maxFixRounds = normalizeBudget(
+      options.maxFixRounds,
+      DEFAULT_MAX_FIX_ROUNDS,
+    );
+    const maxEvaluatorRetries = normalizeBudget(
+      options.maxEvaluatorRetries,
+      DEFAULT_MAX_EVALUATOR_RETRIES,
+    );
+
     const taskText = await readFile(options.taskPath, 'utf8');
     const selectedProjectContextArtifact = await readJsonArtifact(
       options.repoRoot,
@@ -174,9 +188,16 @@ export class PlannerPipeline {
       taskText,
       allowedPaths: selectedAllowedPaths(plannerSourceSlice),
       verificationCommand,
+      maxFixRounds,
     });
-
-    this.registry.assertLlmPayload('planner_package', plannerPackagePayload);
+    try {
+      this.registry.assertLlmPayload('planner_package', plannerPackagePayload);
+    } catch (error) {
+      if (error instanceof SchemaValidationError) {
+        options.onSchemaFailure?.();
+      }
+      throw error;
+    }
 
     await store.writeFromPayload({
       payloadType: 'planner_package',
@@ -205,6 +226,7 @@ export class PlannerPipeline {
     const plannerPackage = plannerPackagePayload as {
       readonly contracts?: readonly Record<string, unknown>[];
     };
+
     const acceptanceContractSource = plannerPackage.contracts?.[0] ?? null;
     if (!acceptanceContractSource) {
       throw new PlannerPipelineError({
@@ -282,8 +304,8 @@ export class PlannerPipeline {
         budgets: {
           max_batches: 1,
           max_units: 1,
-          max_fix_rounds: MAX_FIX_ROUNDS,
-          max_evaluator_retries: MAX_EVALUATOR_RETRIES,
+          max_fix_rounds: maxFixRounds,
+          max_evaluator_retries: maxEvaluatorRetries,
         },
         counters: {
           cli_processes_started: 0,
@@ -350,8 +372,8 @@ export class PlannerPipeline {
       acceptanceContractRef,
       unitId,
       batchId,
-      maxFixRounds: plannerUnitMaxFixRounds(plannerPackagePayload),
-      maxEvaluatorRetries: MAX_EVALUATOR_RETRIES,
+      maxFixRounds: plannerUnitMaxFixRounds(plannerPackagePayload, maxFixRounds),
+      maxEvaluatorRetries,
     };
   }
 
@@ -460,6 +482,7 @@ function buildPlannerPackagePayload(options: {
   readonly taskText: string;
   readonly allowedPaths: readonly string[];
   readonly verificationCommand: string;
+  readonly maxFixRounds: number;
 }): Record<string, unknown> {
   const goal = summarizeGoal(options.taskText);
   const unitId = 'auth-refresh';
@@ -492,7 +515,7 @@ function buildPlannerPackagePayload(options: {
         recommended_generators: ['generator.implementer'],
         recommended_evaluators: ['evaluator.contract_checker'],
         risk_level: 'medium',
-        max_fix_rounds: MAX_FIX_ROUNDS,
+        max_fix_rounds: options.maxFixRounds,
       },
     ],
     batches: [
@@ -539,7 +562,10 @@ function buildPlannerPackagePayload(options: {
   };
 }
 
-function plannerUnitMaxFixRounds(payload: Record<string, unknown>): number {
+function plannerUnitMaxFixRounds(
+  payload: Record<string, unknown>,
+  fallback: number,
+): number {
   const units = Array.isArray(payload.units) ? payload.units : [];
   const first = units[0];
   const value =
@@ -548,7 +574,7 @@ function plannerUnitMaxFixRounds(payload: Record<string, unknown>): number {
       : undefined;
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
     ? Math.floor(value)
-    : MAX_FIX_ROUNDS;
+    : fallback;
 }
 
 function selectedAllowedPaths(

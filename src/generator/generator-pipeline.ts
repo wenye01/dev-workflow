@@ -21,7 +21,11 @@ import { asGitSha } from '../core/types.js';
 import type { ContextBuilderResult } from '../context/context-builder.js';
 import type { PlannerPipelineResult } from '../planner/planner-pipeline.js';
 import { SchemaRegistry } from '../schemas/registry.js';
-import { isRecord, parseJsonObject } from '../schemas/validator.js';
+import {
+  isRecord,
+  parseJsonObject,
+  SchemaValidationError,
+} from '../schemas/validator.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +39,8 @@ export interface GeneratorPipelineOptions {
   readonly planner: PlannerPipelineResult;
   readonly mode?: GeneratorMode;
   readonly previousFailures?: readonly Record<string, unknown>[];
+  readonly onCliProcessStarted?: () => void;
+  readonly onSchemaFailure?: () => void;
 }
 
 export interface GeneratorPipelineResult {
@@ -229,6 +235,7 @@ export class GeneratorPipeline {
       options.repoRoot,
       agentResult.outputArtifact,
       this.registry,
+      options.onSchemaFailure,
     );
     await store.writeFromPayload({
       payloadType: 'role_output',
@@ -376,6 +383,7 @@ export class GeneratorPipeline {
     readonly outputArtifact: ArtifactRef;
     readonly inputArtifacts: readonly ArtifactRef[];
     readonly allowedPaths: readonly string[];
+    readonly onCliProcessStarted?: () => void;
   }) {
     const config = await loadAgentflowConfig({
       configPath: options.configPath,
@@ -383,6 +391,7 @@ export class GeneratorPipeline {
     });
     const manager = new AdapterManager(config, {
       checkCommandAvailability: false,
+      onCliProcessStarted: options.onCliProcessStarted,
     });
     try {
       return await manager.runRole({
@@ -495,12 +504,26 @@ async function readRoleOutputPayload(
   repoRoot: string,
   ref: ArtifactRef,
   registry: SchemaRegistry,
+  onSchemaFailure?: () => void,
 ): Promise<Record<string, unknown>> {
-  const raw = parseJsonObject(
-    await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'),
-  );
+  let raw: Record<string, unknown>;
+  try {
+    raw = parseJsonObject(await readFile(resolveArtifactRef(repoRoot, ref), 'utf8'));
+  } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      onSchemaFailure?.();
+    }
+    throw error;
+  }
   const payload = isCanonicalRoleOutput(raw) ? raw.payload : raw;
-  registry.assertLlmPayload('role_output', payload);
+  try {
+    registry.assertLlmPayload('role_output', payload);
+  } catch (error) {
+    if (error instanceof SchemaValidationError) {
+      onSchemaFailure?.();
+    }
+    throw error;
+  }
   return payload as Record<string, unknown>;
 }
 
