@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>agentflow 原语细化设计方案 · 轻量边界预览</title>
+<style>
+  :root {
+    --bg: #101316;
+    --panel: #171d22;
+    --panel-2: #20272f;
+    --line: #303943;
+    --text: #e8edf2;
+    --muted: #a4afba;
+    --subtle: #768390;
+    --code: #d8dee8;
+    --agent: #64b5ff;
+    --recipe: #4fd6d0;
+    --capability: #e7c75f;
+    --artifact: #54c86f;
+    --event: #f19a54;
+    --policy: #ff7d7d;
+    --workflow: #b994ff;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 15px;
+  }
+  a { color: var(--recipe); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .layout { display: grid; grid-template-columns: 270px 1fr; min-height: 100vh; }
+  aside {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    padding: 28px 20px;
+    border-right: 1px solid var(--line);
+    background: #0c1014;
+    overflow: auto;
+  }
+  .brand {
+    font-family: var(--mono);
+    color: var(--recipe);
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  aside h2 {
+    margin: 8px 0 18px;
+    font-size: 18px;
+    line-height: 1.35;
+  }
+  nav a {
+    display: block;
+    padding: 7px 0;
+    color: var(--muted);
+  }
+  nav a:hover { color: var(--text); text-decoration: none; }
+  main { min-width: 0; }
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 28px; }
+  header {
+    padding: 58px 0 34px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    color: var(--recipe);
+    font-size: 13px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  h1 {
+    margin: 10px 0 12px;
+    font-size: clamp(28px, 5vw, 44px);
+    line-height: 1.16;
+    letter-spacing: 0;
+  }
+  .lede {
+    max-width: 850px;
+    color: var(--muted);
+    font-size: 17px;
+  }
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  h2 {
+    margin: 0 0 8px;
+    font-size: 27px;
+    letter-spacing: 0;
+  }
+  h3 {
+    margin: 0 0 8px;
+    font-size: 19px;
+  }
+  .section-sub {
+    margin: 0 0 24px;
+    color: var(--muted);
+    max-width: 860px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .card strong { color: var(--text); }
+  .muted { color: var(--muted); }
+  .tag {
+    display: inline-block;
+    padding: 2px 7px;
+    margin: 2px 3px 2px 0;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .tag.agent { border-color: #2b6da3; color: #acd8ff; }
+  .tag.recipe { border-color: #247a78; color: #adf2ee; }
+  .tag.cap { border-color: #806c24; color: #f1dc7c; }
+  .tag.workflow { border-color: #6850a5; color: #d8c6ff; }
+  .accent {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+  .agent-dot { background: var(--agent); }
+  .recipe-dot { background: var(--recipe); }
+  .cap-dot { background: var(--capability); }
+  .artifact-dot { background: var(--artifact); }
+  .event-dot { background: var(--event); }
+  .policy-dot { background: var(--policy); }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+    text-align: left;
+  }
+  th {
+    background: var(--panel-2);
+    color: var(--text);
+    font-weight: 600;
+  }
+  td { color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  code, pre {
+    font-family: var(--mono);
+    color: var(--code);
+  }
+  pre {
+    background: #0b0f13;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px;
+    overflow: auto;
+  }
+  .callout {
+    padding: 16px;
+    border-left: 3px solid var(--recipe);
+    background: #102022;
+    border-radius: 8px;
+    color: var(--muted);
+  }
+  .warning {
+    border-left-color: var(--capability);
+    background: #211f12;
+  }
+  .flow {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .flow .step {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    min-height: 118px;
+    position: relative;
+  }
+  .flow .step strong { display: block; margin-bottom: 6px; }
+  .flow .step span { display: block; color: var(--muted); font-size: 13px; }
+  .flow .step::after {
+    content: "";
+    position: absolute;
+    right: -8px;
+    top: 54px;
+    width: 8px;
+    height: 1px;
+    background: var(--line);
+  }
+  .flow .step:last-child::after { display: none; }
+  details {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  details + details { margin-top: 10px; }
+  summary {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 600;
+  }
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  footer {
+    padding: 34px 0 60px;
+    color: var(--subtle);
+  }
+  @media (max-width: 1040px) {
+    .layout { display: block; }
+    aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+    nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+    .grid, .grid.two, .grid.five, .compare, .flow { grid-template-columns: 1fr; }
+    .flow .step::after { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand">agentflow preview</div>
+    <h2>轻量边界设计方案</h2>
+    <nav>
+      <a href="#goal">设计目标</a>
+      <a href="#layers">五层模型</a>
+      <a href="#primitives">原语调整</a>
+      <a href="#capability">Capability-lite</a>
+      <a href="#runtime">Runtime 框架</a>
+      <a href="#workflow">Workflow Constructs</a>
+      <a href="#rules">编排规则</a>
+      <a href="#human">人工介入</a>
+      <a href="#coverage">覆盖关系</a>
+      <a href="#scenario">场景预览</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header id="goal">
+      <div class="wrap">
+        <div class="eyebrow">Preview Draft · 2026-06-16</div>
+        <h1>agentflow 原语细化设计方案</h1>
+        <p class="lede">
+          这版方案把上一轮过重的权限和 target 设计收回来：Activation 主要调用 Agent 或 Recipe，
+          Capability 只做轻量运行边界，ContextBuilder 负责输入构建，parallel / pipeline / branch / loop 放到 Workflow 框架层，
+          人工介入作为一等 workflow 能力处理。
+        </p>
+        <div class="callout warning">
+          目标不是强安全微内核，而是轻量原语 + Agent 承载 + Recipe 编排权 + ContextBuilder 输入构建 + Workflow Constructs 使用层。
+        </div>
+      </div>
+    </header>
+
+    <section id="layers">
+      <div class="wrap">
+        <h2>分层模型</h2>
+        <p class="section-sub">不再从原语直接跳到典型场景。先提供框架能力，再覆盖具体 workflow。</p>
+        <div class="grid five">
+          <div class="card">
+            <h3>Primitive</h3>
+            <p class="muted">最小语义基底。</p>
+            <span class="tag">Activation</span>
+            <span class="tag">Capability</span>
+            <span class="tag">Artifact</span>
+            <span class="tag">Event</span>
+            <span class="tag">Recipe</span>
+            <span class="tag">Policy</span>
+          </div>
+          <div class="card">
+            <h3>Runtime</h3>
+            <p class="muted">让原语跑起来的框架模块。</p>
+            <span class="tag">ContextBuilder</span>
+            <span class="tag">ActivationRunner</span>
+            <span class="tag">ArtifactStore</span>
+            <span class="tag">EventLog</span>
+          </div>
+          <div class="card">
+            <h3>Workflow</h3>
+            <p class="muted">recipe 作者使用的高层 construct。</p>
+            <span class="tag workflow">parallel</span>
+            <span class="tag workflow">pipeline</span>
+            <span class="tag workflow">branch</span>
+            <span class="tag workflow">loop</span>
+          </div>
+          <div class="card">
+            <h3>Human</h3>
+            <p class="muted">人工请求、等待、裁决和恢复。</p>
+            <span class="tag cap">requestHuman</span>
+            <span class="tag cap">human_request</span>
+            <span class="tag cap">human_decision</span>
+          </div>
+          <div class="card">
+            <h3>Agents</h3>
+            <p class="muted">可复用的执行定义。</p>
+            <span class="tag agent">planner</span>
+            <span class="tag agent">generator</span>
+            <span class="tag agent">aggregator</span>
+            <span class="tag agent">memory</span>
+          </div>
+          <div class="card">
+            <h3>Scenarios</h3>
+            <p class="muted">建立在 workflow constructs 上的业务流程。</p>
+            <span class="tag">long-running app dev</span>
+            <span class="tag">review changes</span>
+            <span class="tag">bug hunt</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="primitives">
+      <div class="wrap">
+        <h2>原语调整</h2>
+        <p class="section-sub">Activation target 收敛为 Agent 或 Recipe。aggregation、memory 等不再与 Agent 同级。</p>
+        <div class="grid two">
+          <div class="card">
+            <h3><span class="accent agent-dot"></span>Agent Activation</h3>
+            <p class="muted">调用一个 Agent 定义。Agent 内部可以运行命令、读写工作区、联网、调用工具，原语层不逐步拦截。</p>
+            <pre>Activation {
+  target: { kind: 'agent', ref: 'generator.implementer' },
+  context_request,
+  expected_outputs,
+  capability
+}</pre>
+          </div>
+          <div class="card">
+            <h3><span class="accent recipe-dot"></span>Recipe Activation</h3>
+            <p class="muted">唯一允许产出可执行 Directive 的受控入口。用于动态 plan 展开和嵌套编排。</p>
+            <pre>Activation {
+  target: { kind: 'recipe', ref: 'expand-planner-spec' },
+  expected_outputs: [{ kind: 'directive' }]
+}</pre>
+          </div>
+        </div>
+
+        <table style="margin-top: 18px;">
+          <thead>
+            <tr>
+              <th>旧概念</th>
+              <th>新归属</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>system target</td><td>Agent 内部自然动作，或 runtime 自动动作。</td></tr>
+            <tr><td>polling target</td><td>external.wakeup Event + loop construct。</td></tr>
+            <tr><td>aggregation target</td><td><code>aggregator.*</code> Agent。</td></tr>
+            <tr><td>memory target</td><td><code>memory.summarizer</code> Agent + handoff/summary Artifact。</td></tr>
+            <tr><td>human target</td><td>优先作为 approval 机制；需要人类执行时可定义 <code>human.*</code> Agent。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="capability">
+      <div class="wrap">
+        <h2>Capability-lite</h2>
+        <p class="section-sub">Capability 是启动前的轻量运行边界，不是文件、网络或工具调用级的安全系统。</p>
+        <div class="grid">
+          <div class="card">
+            <h3><span class="accent cap-dot"></span>工作模式</h3>
+            <p class="muted">这次 Activation 大致在做什么。</p>
+            <span class="tag cap">plan</span>
+            <span class="tag cap">execute</span>
+            <span class="tag cap">review</span>
+            <span class="tag cap">aggregate</span>
+            <span class="tag cap">summarize</span>
+            <span class="tag cap">recipe</span>
+          </div>
+          <div class="card">
+            <h3><span class="accent cap-dot"></span>可见输入</h3>
+            <p class="muted">给 ContextBuilder 的输入选择提示。</p>
+            <span class="tag cap">task</span>
+            <span class="tag cap">project_index</span>
+            <span class="tag cap">artifacts</span>
+            <span class="tag cap">recent_events</span>
+            <span class="tag cap">handoff_summary</span>
+          </div>
+          <div class="card">
+            <h3><span class="accent cap-dot"></span>预算与确认</h3>
+            <p class="muted">启动前大致判断，完成后记账；预算耗尽后停止后续调度。</p>
+            <span class="tag cap">max_tokens</span>
+            <span class="tag cap">max_calls</span>
+            <span class="tag cap">max_wall_time</span>
+            <span class="tag cap">approval</span>
+          </div>
+        </div>
+
+        <div class="compare" style="margin-top: 18px;">
+          <div class="card">
+            <h3>Capability 做什么</h3>
+            <pre>work_mode
+visible_inputs
+budget hint
+approval before start
+runtime_hints</pre>
+          </div>
+          <div class="card">
+            <h3>Capability 不做什么</h3>
+            <pre>no file permission gate
+no network permission gate
+no tool-call interception
+no mid-activation kill
+no destructive-op policy</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="runtime">
+      <div class="wrap">
+        <h2>Runtime 框架</h2>
+        <p class="section-sub">Runtime 是原语到实际执行之间的桥。ContextBuilder 是 Agent 输入构建的核心。</p>
+        <div class="flow">
+          <div class="step"><strong>1. Recipe</strong><span>读 state，产出 Activation proposals</span></div>
+          <div class="step"><strong>2. Policy</strong><span>检查编排来源、预算、loop 限制和 approval</span></div>
+          <div class="step"><strong>3. Context</strong><span>ContextBuilder 选择 task、Artifact、Event 和 handoff</span></div>
+          <div class="step"><strong>4. Runner</strong><span>调用 Agent CLI 或 RecipeRunner</span></div>
+          <div class="step"><strong>5. Output</strong><span>Agent CLI 返回结构化输出和 usage</span></div>
+          <div class="step"><strong>6. Record</strong><span>写 Artifact、追加 Event、记录预算</span></div>
+        </div>
+
+        <div class="callout" style="margin-top: 18px;">
+          Artifact 是 Activation 的持久输出；输入不是简单等于 Artifact 列表，而是由 ContextBuilder 从 task、project index、selected artifacts、recent events、handoff summary 和 workflow state 中构建。
+        </div>
+      </div>
+    </section>
+
+    <section id="workflow">
+      <div class="wrap">
+        <h2>Workflow Constructs</h2>
+        <p class="section-sub">这些是高层使用能力，不是原语。它们最终 lower 成 Recipe 状态转移和 Activation proposals。</p>
+        <div class="grid two">
+          <div class="card">
+            <h3>agent()</h3>
+            <p class="muted">调用一个 Agent，产出 Artifact。</p>
+            <pre>agent('implement unit', {
+  role: 'generator.implementer',
+  context,
+  output,
+  capability
+})</pre>
+          </div>
+          <div class="card">
+            <h3>parallel()</h3>
+            <p class="muted">一次 propose 多个 Activation，等待全部完成。</p>
+            <pre>parallel(units.map(unit =>
+  () => agent(`implement ${unit.ref}`)
+))</pre>
+          </div>
+          <div class="card">
+            <h3>pipeline()</h3>
+            <p class="muted">每个 item 独立流过多个 stage，无全局 barrier。</p>
+            <pre>pipeline(units,
+  analyze,
+  verify,
+  summarize
+)</pre>
+          </div>
+          <div class="card">
+            <h3>branch()</h3>
+            <p class="muted">根据 Artifact/Event/WorkflowState 选择下一步。</p>
+            <pre>branch(verdict.status, {
+  pass: done,
+  fail: fix,
+  uncertain: review
+})</pre>
+          </div>
+          <div class="card">
+            <h3>loop()</h3>
+            <p class="muted">支持 fix-until-pass、loop-until-dry、polling loop。</p>
+            <pre>loop({
+  until: state => state.pass,
+  maxIterations: 3,
+  body
+})</pre>
+          </div>
+          <div class="card">
+            <h3>join()</h3>
+            <p class="muted">通常 lower 成 aggregator Agent。</p>
+            <pre>join(reviews, {
+  role: 'aggregator.review_panel'
+})</pre>
+          </div>
+          <div class="card">
+            <h3>requestHuman()</h3>
+            <p class="muted">暂停当前 branch，写入人工请求，等待裁决后由 Recipe 分支继续。</p>
+            <pre>requestHuman({
+  question: '继续修复还是接受当前结果？',
+  options: ['fix', 'accept', 'stop'],
+  context
+})</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="rules">
+      <div class="wrap">
+        <h2>编排权限规则</h2>
+        <p class="section-sub">只保留最小编排安全，不做强安全 sandbox。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>规则</th>
+              <th>结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>普通 AgentActivation 产 plan/workflow_spec Artifact</td>
+              <td>允许，但只是数据。</td>
+            </tr>
+            <tr>
+              <td>普通 AgentActivation 产 Directive</td>
+              <td>忽略或拒绝，不能直接调度。</td>
+            </tr>
+            <tr>
+              <td>Recipe / RecipeActivation 产 Directive</td>
+              <td>允许，经过 schema validation 和 Policy 轻量检查。</td>
+            </tr>
+            <tr>
+              <td>预算、loop depth、activation count 超限</td>
+              <td>停止后续调度，不承诺中途强杀当前 Agent。</td>
+            </tr>
+            <tr>
+              <td>Capability.approval.required</td>
+              <td>启动前请求人工确认。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="human">
+      <div class="wrap">
+        <h2>人工介入</h2>
+        <p class="section-sub">人工介入是关键 workflow 能力，但不是新原语。它通过 Capability、Event、Artifact 和 Recipe branch 组合表达。</p>
+        <div class="flow">
+          <div class="step"><strong>1. Request</strong><span>requestHuman() 或 Capability.approval 触发请求</span></div>
+          <div class="step"><strong>2. Record</strong><span>写 human_request Artifact，追加 approval.requested Event</span></div>
+          <div class="step"><strong>3. Wait</strong><span>当前 workflow branch 进入 waiting_for_human</span></div>
+          <div class="step"><strong>4. Respond</strong><span>用户给出 approve / reject / choose / revise / stop</span></div>
+          <div class="step"><strong>5. Persist</strong><span>写 human_decision Artifact，追加 human.responded Event</span></div>
+          <div class="step"><strong>6. Resume</strong><span>Recipe 读裁决后分支继续或停止</span></div>
+        </div>
+
+        <div class="grid two" style="margin-top: 18px;">
+          <div class="card">
+            <h3>原语层落点</h3>
+            <pre>Capability.approval
+Event: approval.requested
+Artifact: human_request
+Artifact: human_decision
+Event: human.responded
+Recipe: branch(decision)</pre>
+          </div>
+          <div class="card">
+            <h3>裁决结果</h3>
+            <pre>approve -> resume pending activation
+reject  -> skip or fallback
+choose  -> run selected branch
+revise  -> feed notes to planner/generator
+stop    -> stop workflow</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="coverage">
+      <div class="wrap">
+        <h2>覆盖关系</h2>
+        <p class="section-sub">其它文档中的问题通过 Runtime/Workflow/Agent 层覆盖，不需要塞进原语字段。</p>
+        <table>
+          <thead>
+            <tr>
+              <th>问题</th>
+              <th>新设计表达</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>M13 真实 Planner</td><td><code>agent(planner.initial)</code> 产 planner_package Artifact，Recipe 展开后续流程。</td></tr>
+            <tr><td>Planner 内部多角色</td><td>planner recipe 使用 <code>parallel()</code> 调多个 planner Agent，再用 aggregator Agent 汇总。</td></tr>
+            <tr><td>Claude agent/parallel/pipeline</td><td>作为 Workflow Constructs，lower 成 Agent Activation 图。</td></tr>
+            <tr><td>branch / loop</td><td>Recipe 读 Artifact/Event/WorkflowState，选择分支或继续循环。</td></tr>
+            <tr><td>/loop polling</td><td><code>external.wakeup</code> Event + <code>loop()</code> construct。</td></tr>
+            <tr><td>managed agents session</td><td>EventLog + ArtifactStore 的 run view。</td></tr>
+            <tr><td>managed agents harness</td><td>Runtime Framework + Workflow Constructs。</td></tr>
+            <tr><td>context reset / handoff</td><td><code>memory.summarizer</code> Agent 产 handoff Artifact，ContextBuilder 引入。</td></tr>
+            <tr><td>aggregation / memory</td><td>标准 Agent，不是 target 类型。</td></tr>
+            <tr><td>人工介入</td><td><code>requestHuman()</code> / <code>Capability.approval</code> + human_request/human_decision Artifact + Event。</td></tr>
+            <tr><td>system action</td><td>Agent 内部自然执行，或 runtime 自动动作。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="scenario">
+      <div class="wrap">
+        <h2>场景预览</h2>
+        <p class="section-sub">典型场景建立在 constructs 上，不直接侵入原语层。</p>
+        <details open>
+          <summary>Planner</summary>
+          <pre>const plan = await agent('plan task', {
+  role: 'planner.initial',
+  context: context({ mode: 'task', include: { task: true, project_index: true } }),
+  output: { kind: 'planner_package', schema: PLANNER_PACKAGE },
+  capability: { work_mode: 'plan', budget: { max_tokens: 40000 } }
+});</pre>
+        </details>
+        <details>
+          <summary>Generator / Evaluator Loop</summary>
+          <pre>await pipeline(plan.units,
+  unit => loop({
+    maxIterations: unit.max_fix_rounds + 1,
+    body: async state => {
+      const change = await agent('implement or fix', { role: 'generator.implementer' });
+      const verdict = await agent('evaluate', { role: 'evaluator.initial', input: change });
+      return verdict.status === 'pass' ? done(verdict) : continueLoop({ verdict });
+    }
+  })
+);</pre>
+        </details>
+        <details>
+          <summary>Optional Review Escalation</summary>
+          <pre>await branch(unit.status, {
+  pass: done,
+  fail_after_retries: () => parallel([
+    () => agent('security review', { role: 'reviewer.security' }),
+    () => agent('correctness review', { role: 'reviewer.correctness' }),
+    () => agent('adversarial critique', { role: 'critic.adversary' })
+  ]).then(reviews => join(reviews, { role: 'aggregator.review_panel' }))
+});</pre>
+        </details>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        完整方案见 <a href="./agentflow-primitive-refinement-preview.md">agentflow-primitive-refinement-preview.md</a>。
+      </div>
+    </footer>
+  </main>
+</div>
+</body>
+</html>

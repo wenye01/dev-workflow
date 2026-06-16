@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>agentflow 六原语 · 协作范式可视化</title>
+<style>
+  :root {
+    --bg: #0e1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2230;
+    --line: #2a313c;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --text-mute: #6e7681;
+    --code: #c9d1d9;
+
+    --c-activation: #58a6ff;
+    --c-capability: #bc8cff;
+    --c-artifact: #3fb950;
+    --c-event: #f0883e;
+    --c-recipe: #39d0d8;
+    --c-policy: #ff7b72;
+
+    --mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 15px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- Hero ---------- */
+  header.hero {
+    padding: 64px 0 40px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    color: var(--c-recipe);
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+  h1 { font-size: 38px; margin: 12px 0 10px; letter-spacing: -.01em; }
+  h1 .accent { color: var(--c-activation); }
+  .lede { color: var(--text-dim); font-size: 17px; max-width: 820px; }
+  .criterion {
+    margin-top: 22px;
+    background: var(--bg-soft);
+    border-left: 3px solid var(--c-recipe);
+    padding: 14px 18px;
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+  .criterion b { color: var(--text); }
+
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 26px; margin: 0 0 8px; }
+  .sec-sub { color: var(--text-dim); margin: 0 0 28px; font-size: 15px; }
+
+  /* ---------- Primitive cards ---------- */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 18px 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color .2s, transform .2s, box-shadow .2s;
+  }
+  .card::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: var(--accent);
+  }
+  .card[data-p="activation"] { --accent: var(--c-activation); }
+  .card[data-p="capability"] { --accent: var(--c-capability); }
+  .card[data-p="artifact"]   { --accent: var(--c-artifact); }
+  .card[data-p="event"]      { --accent: var(--c-event); }
+  .card[data-p="recipe"]     { --accent: var(--c-recipe); }
+  .card[data-p="policy"]     { --accent: var(--c-policy); }
+
+  .card .tag {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .card h3 { margin: 4px 0 2px; font-size: 19px; }
+  .card .axis { color: var(--text-mute); font-size: 12px; margin-bottom: 10px; }
+  .card .duty { color: var(--text-dim); font-size: 13.5px; margin-bottom: 12px; min-height: 38px; }
+
+  .field-label {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-mute);
+    letter-spacing: .08em; text-transform: uppercase; margin: 8px 0 4px;
+  }
+  .fields { list-style: none; margin: 0; padding: 0; }
+  .fields li {
+    font-family: var(--mono); font-size: 12.5px; color: var(--code);
+    padding: 3px 0; border-bottom: 1px dashed var(--line);
+    display: flex; justify-content: space-between; gap: 8px;
+  }
+  .fields li:last-child { border-bottom: none; }
+  .fields li span.desc { color: var(--text-mute); font-family: var(--sans); font-size: 11.5px; text-align: right; }
+
+  .not-do {
+    margin-top: 10px; font-size: 12px; color: var(--text-mute);
+    background: rgba(255,255,255,.02); padding: 7px 10px; border-radius: 6px;
+  }
+  .not-do b { color: var(--c-policy); }
+
+  /* ---------- Functions ---------- */
+  .func-list { display: flex; flex-direction: column; gap: 10px; }
+  .func {
+    display: grid; grid-template-columns: 30px 1fr auto; align-items: center;
+    gap: 14px; background: var(--bg-card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 16px;
+  }
+  .func .num { color: var(--text-mute); font-family: var(--mono); font-size: 13px; }
+  .func .sig { font-family: var(--mono); font-size: 14px; color: var(--code); }
+  .func .sig .ret { color: var(--c-artifact); }
+  .func .role { color: var(--text-dim); font-size: 12.5px; white-space: nowrap; }
+  .func[data-p="activation"] .sig .fn { color: var(--c-activation); }
+  .func[data-p="artifact"]   .sig .fn { color: var(--c-artifact); }
+  .func[data-p="event"]      .sig .fn { color: var(--c-event); }
+  .func[data-p="recipe"]     .sig .fn { color: var(--c-recipe); }
+  .func[data-p="policy"]     .sig .fn { color: var(--c-policy); }
+
+  .law {
+    margin-top: 22px; background: var(--bg-soft); border-radius: 10px;
+    padding: 18px 22px; border: 1px solid var(--line);
+  }
+  .law code { font-family: var(--mono); color: var(--c-recipe); }
+
+  /* ---------- Demo ---------- */
+  .demo {
+    border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--bg-soft);
+  }
+  .demo-top {
+    padding: 14px 20px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .demo-top .task {
+    font-family: var(--mono); font-size: 13px; color: var(--c-activation);
+    background: rgba(88,166,255,.08); padding: 4px 10px; border-radius: 6px;
+  }
+  .demo-body { display: grid; grid-template-columns: 1.15fr 1fr; min-height: 460px; }
+
+  /* left: narrative + badges */
+  .demo-left { padding: 20px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .badges { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 18px; }
+  .badge {
+    text-align: center; padding: 8px 2px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--bg-card);
+    transition: all .25s; opacity: .42;
+  }
+  .badge .b-name { font-size: 11px; font-weight: 600; }
+  .badge[data-p="activation"] .b-name { color: var(--c-activation); }
+  .badge[data-p="capability"] .b-name { color: var(--c-capability); }
+  .badge[data-p="artifact"]   .b-name { color: var(--c-artifact); }
+  .badge[data-p="event"]      .b-name { color: var(--c-event); }
+  .badge[data-p="recipe"]     .b-name { color: var(--c-recipe); }
+  .badge[data-p="policy"]     .b-name { color: var(--c-policy); }
+  .badge .b-axis { font-size: 9px; color: var(--text-mute); }
+  .badge.active { opacity: 1; transform: translateY(-2px); box-shadow: 0 0 0 1px var(--accent), 0 6px 18px -8px var(--accent); }
+  .badge[data-p="activation"].active { --accent: var(--c-activation); border-color: var(--c-activation); }
+  .badge[data-p="capability"].active { --accent: var(--c-capability); border-color: var(--c-capability); }
+  .badge[data-p="artifact"].active   { --accent: var(--c-artifact); border-color: var(--c-artifact); }
+  .badge[data-p="event"].active      { --accent: var(--c-event); border-color: var(--c-event); }
+  .badge[data-p="recipe"].active     { --accent: var(--c-recipe); border-color: var(--c-recipe); }
+  .badge[data-p="policy"].active     { --accent: var(--c-policy); border-color: var(--c-policy); }
+
+  .step-num { font-family: var(--mono); color: var(--text-mute); font-size: 12px; }
+  .step-title { font-size: 18px; margin: 6px 0 4px; font-weight: 600; }
+  .step-func {
+    font-family: var(--mono); font-size: 13px; color: var(--c-recipe);
+    background: rgba(57,208,216,.07); display: inline-block; padding: 3px 9px;
+    border-radius: 5px; margin-bottom: 12px;
+  }
+  .step-narr { color: var(--text-dim); font-size: 14px; flex: 1; }
+  .step-note {
+    margin-top: 12px; font-size: 12.5px; color: var(--c-policy);
+    background: rgba(255,123,114,.07); padding: 8px 11px; border-radius: 6px;
+    border-left: 2px solid var(--c-policy);
+  }
+
+  .status-row { display: flex; gap: 10px; margin-top: 14px; }
+  .status-chip {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 12px; min-height: 50px;
+  }
+  .status-chip .k { font-family: var(--mono); font-size: 10.5px; color: var(--text-mute); text-transform: uppercase; letter-spacing: .08em; }
+  .status-chip .v { font-family: var(--mono); font-size: 13px; margin-top: 3px; }
+  .status-chip.dir .v { color: var(--c-recipe); }
+  .status-chip.gate .v.admit { color: var(--c-artifact); }
+  .status-chip.gate .v.stop  { color: var(--c-policy); }
+  .status-chip.gate .v.idle  { color: var(--text-mute); }
+
+  /* right: state */
+  .demo-right { display: flex; flex-direction: column; }
+  .state-pane { flex: 1; padding: 16px 18px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .state-pane:first-child { border-bottom: 1px solid var(--line); }
+  .state-head {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px;
+  }
+  .state-head .h { font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+  .state-head .h.evt { color: var(--c-event); }
+  .state-head .h.art { color: var(--c-artifact); }
+  .state-head .cnt { font-family: var(--mono); font-size: 11px; color: var(--text-mute); }
+  .state-list {
+    list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1;
+    font-family: var(--mono); font-size: 12px;
+  }
+  .state-list::-webkit-scrollbar { width: 6px; }
+  .state-list::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+  .state-list li {
+    padding: 5px 8px; border-radius: 5px; margin-bottom: 3px;
+    background: rgba(255,255,255,.015); border-left: 2px solid var(--line);
+    color: var(--code); word-break: break-all;
+  }
+  .state-list li.flash { animation: flash .9s ease; }
+  @keyframes flash {
+    0% { background: var(--flash); border-left-color: var(--flash); }
+    100% { background: rgba(255,255,255,.015); border-left-color: var(--line); }
+  }
+  .state-list.evt li { --flash: rgba(240,136,62,.22); }
+  .state-list.art li { --flash: rgba(63,185,80,.22); }
+  .state-list li .ref { color: var(--text-mute); }
+  .state-list li .meta { color: var(--text-dim); font-family: var(--sans); font-size: 11px; }
+  .state-list li .upd { color: var(--c-event); font-size: 10px; }
+  .empty { color: var(--text-mute); font-style: italic; font-family: var(--sans); font-size: 12px; padding: 6px 8px; }
+
+  /* controls */
+  .demo-ctrl {
+    display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+    border-top: 1px solid var(--line); background: var(--bg);
+  }
+  .demo-ctrl button {
+    background: var(--bg-card); color: var(--text); border: 1px solid var(--line);
+    padding: 8px 16px; border-radius: 7px; font-family: var(--sans); font-size: 13px;
+    cursor: pointer; transition: all .15s;
+  }
+  .demo-ctrl button:hover:not(:disabled) { border-color: var(--c-activation); color: var(--c-activation); }
+  .demo-ctrl button:disabled { opacity: .35; cursor: not-allowed; }
+  .demo-ctrl button.primary { background: var(--c-activation); color: #0e1117; border-color: var(--c-activation); font-weight: 600; }
+  .demo-ctrl .progress { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  .demo-ctrl input[type=range] { width: 140px; accent-color: var(--c-activation); }
+
+  footer { padding: 40px 0 60px; color: var(--text-mute); font-size: 13px; }
+  footer b { color: var(--text-dim); }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr 1fr; }
+    .demo-body { grid-template-columns: 1fr; }
+    .demo-left { border-right: none; border-bottom: 1px solid var(--line); }
+    .badges { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    .func { grid-template-columns: 24px 1fr; }
+    .func .role { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">agentflow · primitive basis</div>
+    <h1>六原语如何<span class="accent">协作完成</span>一个任务</h1>
+    <p class="lede">把多 Agent 协作拆到「再往下拆只会增加系统复杂度」为止，得到六个最小职责单位。它们各自的内容、彼此的五个交互函数、以及一条完整任务在这套范式里如何跑完——全部可交互。</p>
+    <div class="criterion">
+      <b>原语判据：</b>原语 = 多 Agent 协作下难以继续拆分的职责单位。往下拆反而增加复杂度的，才保留为原语；能由其它原语合成的是视图（如 <b>Session = fold(events, artifacts)</b>，故不列为原语）；<b>Actor</b> 不运行不产出，只是 Activation 的 target 参数，也降级。
+    </div>
+  </div>
+</header>
+
+<!-- ===== Section A: 六原语 ===== -->
+<section>
+  <div class="wrap">
+    <h2>一、六原语各自的内容</h2>
+    <p class="sec-sub">每个原语有唯一职责，下面列出它「内部承载什么」和「刻意不承担什么」。</p>
+    <div class="grid">
+
+      <div class="card" data-p="activation">
+        <div class="tag">PRIMITIVE 01</div>
+        <h3>Activation</h3>
+        <div class="axis">执行轴 · 一次受控委派</div>
+        <div class="duty">把目标交给谁、在什么约束下、期望什么产物——协作的原子动作。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>id<span class="desc">唯一标识</span></li>
+          <li>target<span class="desc">指向谁（原 Actor 退化进来）</span></li>
+          <li>objective<span class="desc">目标</span></li>
+          <li>input_artifacts<span class="desc">输入引用</span></li>
+          <li>expected_outputs<span class="desc">输出契约</span></li>
+          <li>capability_grants<span class="desc">→ Capability</span></li>
+          <li>lifecycle<span class="desc">timeout / cancel / retry</span></li>
+          <li>budget_class<span class="desc">预算类别</span></li>
+          <li>metadata<span class="desc">recipe / phase / group</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不管 Agent 内部每一条 bash / 工具调用（那是内部 trace）。</div>
+      </div>
+
+      <div class="card" data-p="capability">
+        <div class="tag">PRIMITIVE 02</div>
+        <h3>Capability</h3>
+        <div class="axis">约束轴 · 静态能力边界</div>
+        <div class="duty">这次 Activation 被允许用什么工具、资源、预算。prompt 不是边界，它才是。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>file_read_scope<span class="desc">可读路径</span></li>
+          <li>file_write_scope<span class="desc">可写路径</span></li>
+          <li>tools<span class="desc">bash / git / mcp…</span></li>
+          <li>network<span class="desc">bool</span></li>
+          <li>sandbox<span class="desc">none / worktree / container</span></li>
+          <li>budget<span class="desc">单次 token / wall-time 上限</span></li>
+          <li>approval_required<span class="desc">是否需人工</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不决定业务目标（那是 Recipe），不动态升级（那是 Policy）。</div>
+      </div>
+
+      <div class="card" data-p="artifact">
+        <div class="tag">PRIMITIVE 03</div>
+        <h3>Artifact</h3>
+        <div class="axis">状态轴 · 跨边界稳定产物</div>
+        <div class="duty">唯一能被后续 Activation 引用的稳定内容。不外化就不算系统状态。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>ref<span class="desc">稳定路径</span></li>
+          <li>schema_id<span class="desc">结构契约</span></li>
+          <li>content_hash<span class="desc">内容寻址</span></li>
+          <li>producer<span class="desc">哪个 Activation 产出</span></li>
+          <li>input_refs<span class="desc">依赖了哪些</span></li>
+          <li>payload<span class="desc">结构化内容</span></li>
+          <li>views<span class="desc">markdown / summary 渲染</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不承载隐式上下文，不保存过程（过程归 Event）。</div>
+      </div>
+
+      <div class="card" data-p="event">
+        <div class="tag">PRIMITIVE 04</div>
+        <h3>Event</h3>
+        <div class="axis">事实轴 · append-only 事实流</div>
+        <div class="duty">只追加、不改写。是恢复、审计、重放、成本核算的唯一来源。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>type<span class="desc">activation.started 等</span></li>
+          <li>timestamp<span class="desc">顺序号</span></li>
+          <li>activation_ref<span class="desc">归属</span></li>
+          <li>payload<span class="desc">事实细节</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不作为可变状态表；与 Artifact 正交（事实流 vs 状态快照）。</div>
+      </div>
+
+      <div class="card" data-p="recipe">
+        <div class="tag">PRIMITIVE 05</div>
+        <h3>Recipe</h3>
+        <div class="axis">编排轴 · 读状态 → 提议下一步</div>
+        <div class="duty">纯函数。读取 fold 出的 state，提议下一个/组 Activation，直到 Done。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>read(state)<span class="desc">只读 fold 结果</span></li>
+          <li>→ Directive<span class="desc">propose / done / stop</span></li>
+          <li>kind<span class="desc">deterministic / recorded-dynamic</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不直接调模型做控制流（LLM 决策先固化为 Event 再被读取），不裁决（那是 Policy）。</div>
+      </div>
+
+      <div class="card" data-p="policy">
+        <div class="tag">PRIMITIVE 06</div>
+        <h3>Policy</h3>
+        <div class="axis">裁决轴 · 准许 / 升级 / 停止</div>
+        <div class="duty">动态裁决。根据风险/失败/分歧信号，决定 Activation 放行、升级复杂度还是停止。</div>
+        <div class="field-label">内部内容</div>
+        <ul class="fields">
+          <li>capability_gate<span class="desc">权限检查</span></li>
+          <li>budget_gate<span class="desc">全局预算</span></li>
+          <li>risk_gate<span class="desc">风险检查</span></li>
+          <li>escalation_rules<span class="desc">低置信/多轮失败→升级</span></li>
+          <li>stop_conditions<span class="desc">终止条件</span></li>
+        </ul>
+        <div class="not-do"><b>不做：</b>不提议做什么（那是 Recipe）；静态权限归 Capability，全局预算归这里。</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===== Section B: 交互函数 ===== -->
+<section>
+  <div class="wrap">
+    <h2>二、原语间的五个交互函数</h2>
+    <p class="sec-sub">整套范式只需要这五个函数。前三个由 Activation 触发，后两个是内核循环的每一拍。</p>
+    <div class="func-list">
+      <div class="func" data-p="activation">
+        <div class="num">1</div>
+        <div class="sig"><span class="fn">activate</span>(target, objective, capability) <span class="ret">→ Activation</span></div>
+        <div class="role">委派：把目标交给某执行者，附上能力边界</div>
+      </div>
+      <div class="func" data-p="artifact">
+        <div class="num">2</div>
+        <div class="sig"><span class="fn">write</span>(activation, artifact) <span class="ret">→ Artifact</span></div>
+        <div class="role">产出：外化为可被后续引用的稳定状态</div>
+      </div>
+      <div class="func" data-p="event">
+        <div class="num">3</div>
+        <div class="sig"><span class="fn">emit</span>(activation, event) <span class="ret">→ Event</span></div>
+        <div class="role">留痕：append-only 追加事实</div>
+      </div>
+      <div class="func" data-p="recipe">
+        <div class="num">4</div>
+        <div class="sig"><span class="fn">decide</span>(recipe, <span style="color:var(--c-recipe)">fold</span>(events, artifacts)) <span class="ret">→ [Activation] | Done | Stop</span></div>
+        <div class="role">编排：纯函数读状态，提议下一步</div>
+      </div>
+      <div class="func" data-p="policy">
+        <div class="num">5</div>
+        <div class="sig"><span class="fn">gate</span>(policy, activation, signals) <span class="ret">→ admit | escalate | stop</span></div>
+        <div class="role">裁决：是否放行 / 升级 / 终止</div>
+      </div>
+    </div>
+    <div class="law">
+      <b style="color:var(--text)">关键不变量：</b>
+      <code>decide()</code> 与 <code>gate()</code> 只读 <code>fold(events, artifacts)</code>，<b>永不直接调模型</b>。
+      所以即使整个 workflow 是「AI 驱动」的，编排与裁决层依然 100% 可重放——LLM 的任何决策都必须先固化成 Event/Artifact，再被这两个纯函数读取。
+    </div>
+  </div>
+</section>
+
+<!-- ===== Section C: 演示器 ===== -->
+<section>
+  <div class="wrap">
+    <h2>三、协作演示：六原语如何跑完一个任务</h2>
+    <p class="sec-sub">任务 = <span style="font-family:var(--mono);color:var(--c-activation)">implement unit: auth-refresh</span>。逐步推进，观察 Recipe/Policy 只读 fold、Activation 执行、Artifact 累积、Event 追加。</p>
+
+    <div class="demo">
+      <div class="demo-top">
+        <span style="font-size:13px;color:var(--text-dim)">TASK</span>
+        <span class="task">implement unit: auth-refresh</span>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-mute);font-family:var(--mono)">Recipe ⟷ Policy ⟷ Activation 三轴循环</span>
+      </div>
+
+      <div class="demo-body">
+        <!-- LEFT -->
+        <div class="demo-left">
+          <div class="badges" id="badges">
+            <div class="badge" data-p="activation"><div class="b-name">Activation</div><div class="b-axis">执行</div></div>
+            <div class="badge" data-p="capability"><div class="b-name">Capability</div><div class="b-axis">约束</div></div>
+            <div class="badge" data-p="artifact"><div class="b-name">Artifact</div><div class="b-axis">状态</div></div>
+            <div class="badge" data-p="event"><div class="b-name">Event</div><div class="b-axis">事实</div></div>
+            <div class="badge" data-p="recipe"><div class="b-name">Recipe</div><div class="b-axis">编排</div></div>
+            <div class="badge" data-p="policy"><div class="b-name">Policy</div><div class="b-axis">裁决</div></div>
+          </div>
+
+          <div class="step-num" id="stepNum">step 0 / 0</div>
+          <div class="step-title" id="stepTitle">—</div>
+          <div class="step-func" id="stepFunc">—</div>
+          <div class="step-narr" id="stepNarr">点击「下一步」或「自动播放」开始。</div>
+          <div class="step-note" id="stepNote" style="display:none"></div>
+
+          <div class="status-row">
+            <div class="status-chip dir">
+              <div class="k">Recipe directive</div>
+              <div class="v" id="dirVal" style="color:var(--text-mute)">—</div>
+            </div>
+            <div class="status-chip gate">
+              <div class="k">Policy gate</div>
+              <div class="v idle" id="gateVal">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT -->
+        <div class="demo-right">
+          <div class="state-pane">
+            <div class="state-head">
+              <span class="h art">ArtifactStore（累积 · 状态快照）</span>
+              <span class="cnt" id="artCnt">0</span>
+            </div>
+            <ul class="state-list art" id="artList"><li class="empty">（空）</li></ul>
+          </div>
+          <div class="state-pane">
+            <div class="state-head">
+              <span class="h evt">EventLog（append-only · 事实流）</span>
+              <span class="cnt" id="evtCnt">0</span>
+            </div>
+            <ul class="state-list evt" id="evtList"><li class="empty">（空）</li></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-ctrl">
+        <button id="btnReset">↺ 重置</button>
+        <button id="btnPrev">‹ 上一步</button>
+        <button id="btnPlay" class="primary">▶ 自动播放</button>
+        <button id="btnNext">下一步 ›</button>
+        <span class="progress" id="progress">0 / 0</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <b>一句话：</b>六原语 = Activation（执行）+ Capability（约束）+ Artifact（状态）+ Event（事实）+ Recipe（编排）+ Policy（裁决）。<code style="font-family:var(--mono);color:var(--c-recipe)">Session</code> 不是原语，它是 <code style="font-family:var(--mono);color:var(--c-recipe)">fold(events, artifacts)</code> 的视图——演示器右侧每一拍都在重新 fold。
+  </div>
+</footer>
+
+<script>
+// ---------- 步骤序列 ----------
+// 每步标注主导原语、调用函数、叙事；emit/write 描述本步产生的事件/产物
+const STEPS = [
+  {
+    p:'recipe', func:'fold(events, artifacts) → state',
+    title:'初始：种子 Artifact 入库',
+    narr:'Session 启动。只有一颗种子 Artifact（task）进入 ArtifactStore，EventLog 为空。SessionState = fold(∅, {task})。',
+    artifacts:[{ref:'.agentflow/task.json', type:'task', producer:'user', meta:'修复 auth-refresh 刷新失效', upd:1}],
+    dir:'state ready', gate:'idle'
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe 读状态，提议规划',
+    narr:'Recipe 是纯函数，读取 fold 出的 state，看到 task，提议第一个 Activation：planner。',
+    dir:'propose [Activation#1: planner]', gate:'idle'
+  },
+  {
+    p:'policy', func:'gate(policy, activation, signals)',
+    title:'Policy 裁决：只读低风险 → 放行',
+    narr:'planner 只读、不写、低风险。capability_gate / budget_gate / risk_gate 全部通过。',
+    gate:'admit'
+  },
+  {
+    p:'activation', func:'activate(planner, "plan auth-refresh", cap_readonly)',
+    title:'激活 planner（只读 Capability）',
+    narr:'内核创建 Activation#1，绑定只读 Capability（read src/**，no network，sandbox=none）。Agent 在边界内自主运行。',
+    events:[{type:'activation.started', ref:'#1 planner'}],
+    dir:'running', gate:'—'
+  },
+  {
+    p:'artifact', func:'write(#1, planner_package)',
+    title:'planner 产出 planner_package',
+    narr:'planner 把计划外化为 Artifact：unit 拆分、contract、batch。只有外化的内容才进入系统状态。',
+    artifacts:[{ref:'.agentflow/planner/package.json', type:'planner_package', producer:'#1 planner', meta:'unit=auth-refresh', upd:1}],
+  },
+  {
+    p:'event', func:'emit(#1, activation.completed)',
+    title:'记录事实',
+    narr:'追加 activation.completed。append-only，用于恢复与审计。',
+    events:[{type:'activation.completed', ref:'#1', meta:'status=ok'}],
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe 读新状态，提议实现',
+    narr:'Recipe 重新 fold，看到 planner_package，提议 Activation：generator。',
+    dir:'propose [Activation#2: generator]', gate:'idle'
+  },
+  {
+    p:'policy', func:'gate(policy, activation, signals)',
+    title:'Policy 裁决：要写源码 → 放行（worktree）',
+    narr:'generator 要写文件。Policy 要求 sandbox=worktree + 写范围限定，Capability 满足。',
+    gate:'admit'
+  },
+  {
+    p:'activation', func:'activate(generator, "implement", cap_write+worktree)',
+    title:'激活 generator（写 Capability + worktree）',
+    narr:'Activation#2 绑定写权限 Capability，隔离在 worktree。',
+    events:[{type:'activation.started', ref:'#2 generator'}],
+    dir:'running', gate:'—'
+  },
+  {
+    p:'artifact', func:'write(#2, change_package)',
+    title:'generator 产出 change_package',
+    narr:'变更包成为 Artifact：改动文件 + 验证命令。',
+    artifacts:[{ref:'.agentflow/units/auth-refresh/change.json', type:'change_package', producer:'#2 generator', meta:'初版', upd:1}],
+  },
+  {
+    p:'event', func:'emit(#2, activation.completed)',
+    title:'记录事实',
+    narr:'追加事件。',
+    events:[{type:'activation.completed', ref:'#2', meta:'status=ok'}],
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe 提议评估',
+    narr:'看到 change_package → 提议 evaluator。',
+    dir:'propose [Activation#3: evaluator]', gate:'idle'
+  },
+  {
+    p:'policy', func:'gate(...)',
+    title:'Policy 放行',
+    narr:'evaluator 只读 → admit。',
+    gate:'admit'
+  },
+  {
+    p:'activation', func:'activate(evaluator, "verify", cap_readonly)',
+    title:'激活 evaluator',
+    narr:'Activation#3 评估变更是否满足 contract。',
+    events:[{type:'activation.started', ref:'#3 evaluator'}],
+    dir:'running', gate:'—'
+  },
+  {
+    p:'artifact', func:'write(#3, evaluator_report)',
+    title:'评估报告：置信度低 ⚠',
+    narr:'evaluator_report 标记 confidence=low。这是触发后续修复/升级的关键信号。',
+    artifacts:[{ref:'.agentflow/evaluator/report.json', type:'evaluator_report', producer:'#3 evaluator', meta:'confidence=low', upd:1}],
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe 读到低置信 → 提议修复',
+    narr:'Recipe 看到 confidence=low，提议 generator-fix。',
+    dir:'propose [Activation#4: generator-fix]', gate:'idle'
+  },
+  {
+    p:'policy', func:'gate(policy, activation, signals)',
+    title:'Policy 判断：第1次低置信 → 放行（不升级）',
+    narr:'信号=低置信，但失败次数=1，未达升级阈值。admit，不上 reviewer panel——这就是「默认路径必须轻」。',
+    gate:'admit',
+    note:'若连续 3 次低置信，Policy 将 escalate：触发 reviewer panel（多个独立 Activation + Aggregation）。'
+  },
+  {
+    p:'activation', func:'activate(generator-fix, "repair", cap_write+worktree)',
+    title:'激活 generator-fix',
+    narr:'修复激活，重新写 worktree。',
+    events:[{type:'activation.started', ref:'#4 generator-fix'}],
+    dir:'running', gate:'—'
+  },
+  {
+    p:'artifact', func:'write(#4, change_package*)',
+    title:'修订后的 change_package',
+    narr:'同一 ref 指向新 hash（内容寻址）。ArtifactStore 中引用更新。',
+    artifacts:[{ref:'.agentflow/units/auth-refresh/change.json', type:'change_package', producer:'#4 generator-fix', meta:'修订版', upd:2}],
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe 再评估',
+    narr:'提议 evaluator 复核修订后的变更。',
+    dir:'propose [Activation#5: evaluator]', gate:'idle'
+  },
+  {
+    p:'activation', func:'activate(evaluator, "re-verify", cap_readonly)',
+    title:'复评估：置信度高 ✓',
+    narr:'Activation#5 产出 evaluator_report，confidence=high，满足 contract。',
+    events:[{type:'activation.started', ref:'#5 evaluator'}],
+    artifacts:[{ref:'.agentflow/evaluator/report.json', type:'evaluator_report', producer:'#5 evaluator', meta:'confidence=high', upd:2}],
+    dir:'running', gate:'—'
+  },
+  {
+    p:'recipe', func:'decide(recipe, state)',
+    title:'Recipe：通过 → Done',
+    narr:'confidence=high 满足 contract，Recipe 返回 Done(change_package)。',
+    dir:'Done', gate:'idle'
+  },
+  {
+    p:'policy', func:'gate(policy, ..., terminal)',
+    title:'Policy 终态确认 → Stop',
+    narr:'Done 经 Policy 终态门确认，session 停止。EventLog 完整保留，可随时 fold 重放整个协作。',
+    events:[{type:'session.stopped', ref:'session', meta:'reason=done'}],
+    gate:'stop'
+  },
+];
+
+// ---------- 渲染 ----------
+let current = 0;
+let playing = false;
+let timer = null;
+
+const $ = id => document.getElementById(id);
+const PNAME = { activation:'Activation', capability:'Capability', artifact:'Artifact', event:'Event', recipe:'Recipe', policy:'Policy' };
+
+function fold(upto) {
+  // 从 step 0 到 upto 累积所有 events / artifacts —— 这正是 Session = fold()
+  const events = [];
+  const artMap = new Map(); // ref -> {type, producer, meta, upd, order, lastSeen}
+  for (let i = 0; i <= upto; i++) {
+    const s = STEPS[i];
+    (s.events||[]).forEach(e => events.push({...e, _step:i}));
+    (s.artifacts||[]).forEach(a => {
+      const prev = artMap.get(a.ref);
+      artMap.set(a.ref, {
+        ref:a.ref, type:a.type, producer:a.producer, meta:a.meta,
+        upd:a.upd || (prev?prev.upd:1),
+        order: prev? prev.order : artMap.size,
+        lastSeen:i
+      });
+    });
+  }
+  return { events, artifacts:[...artMap.values()].sort((a,b)=>a.order-b.order) };
+}
+
+function render() {
+  const step = STEPS[current];
+  // badges
+  document.querySelectorAll('.badge').forEach(b => {
+    b.classList.toggle('active', b.dataset.p === step.p);
+  });
+
+  $('stepNum').textContent = `step ${current+1} / ${STEPS.length}　·　主导：${PNAME[step.p]}`;
+  $('stepTitle').textContent = step.title;
+  $('stepFunc').textContent = step.func;
+  $('stepNarr').textContent = step.narr;
+
+  const note = $('stepNote');
+  if (step.note) { note.textContent = '⚠ ' + step.note; note.style.display = 'block'; }
+  else { note.style.display = 'none'; }
+
+  // directive / gate
+  const dirV = $('dirVal');
+  if (step.dir != null) { dirV.textContent = step.dir; dirV.style.color = step.dir==='Done'?'var(--c-artifact)':'var(--c-recipe)'; }
+  else dirV.textContent = '—';
+  const gateV = $('gateVal');
+  gateV.className = 'v ' + (step.gate || 'idle');
+  gateV.textContent = step.gate == null ? '—' : step.gate.toUpperCase();
+
+  // state (fold)
+  const { events, artifacts } = fold(current);
+  renderList('artList', artifacts, a => {
+    const updTag = a.upd>1 ? ` <span class="upd">·v${a.upd}</span>` : '';
+    return `<span class="ref">${escapeHtml(a.ref)}</span>${updTag}<br><span class="meta">${escapeHtml(a.type)} · ${escapeHtml(a.producer)} · ${escapeHtml(a.meta||'')}</span>`;
+  }, a => a.lastSeen === current);
+  $('artCnt').textContent = artifacts.length;
+
+  renderList('evtList', events, e =>
+    `<span class="ref">${escapeHtml(e.type)}</span> <span class="meta">${escapeHtml(e.ref)} ${e.meta?'· '+escapeHtml(e.meta):''}</span>`,
+    e => e._step === current);
+  $('evtCnt').textContent = events.length;
+
+  // controls
+  $('btnPrev').disabled = current === 0;
+  $('btnNext').disabled = current === STEPS.length - 1;
+  $('progress').textContent = `${current+1} / ${STEPS.length}`;
+}
+
+function renderList(listId, items, toHtml, isNew) {
+  const el = $(listId);
+  if (items.length === 0) { el.innerHTML = '<li class="empty">（空）</li>'; return; }
+  el.innerHTML = items.map((it,i) =>
+    `<li class="${isNew(it,i)?'flash':''}">${toHtml(it,i)}</li>`
+  ).join('');
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+function go(n){ current = Math.max(0, Math.min(STEPS.length-1, n)); render(); if(current===STEPS.length-1) stopPlay(); }
+function next(){ go(current+1); }
+function prev(){ go(current-1); }
+function play(){
+  if (playing) { stopPlay(); return; }
+  if (current === STEPS.length-1) current = -1; // 从头
+  playing = true; $('btnPlay').textContent = '⏸ 暂停';
+  timer = setInterval(()=>{ if(current<STEPS.length-1) next(); else stopPlay(); }, 1600);
+}
+function stopPlay(){ playing=false; if(timer){clearInterval(timer);timer=null;} $('btnPlay').textContent='▶ 自动播放'; }
+
+$('btnNext').onclick = next;
+$('btnPrev').onclick = prev;
+$('btnReset').onclick = ()=>{ stopPlay(); go(0); };
+$('btnPlay').onclick = play;
+
+render();
+</script>
+</body>
+</html>
