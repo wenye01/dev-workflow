@@ -1,0 +1,12 @@
+export type RunId = string;
+export type ActivationId = string;
+export type InvocationId = string;
+export type DirectiveId = string;
+export type ActivationCacheKey = string;
+export type IdempotencyKey = string;
+export type ArtifactRef = string;
+export type SchemaId = string;
+export type AgentRef = string;
+export type RecipeRef = string;
+export type EventSeq = number;
+export type ContentHash = string;
